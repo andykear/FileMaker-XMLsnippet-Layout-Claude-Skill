@@ -106,8 +106,6 @@ Once the skill is installed, Claude will automatically apply it when you ask for
 
 Layout mode requires the `fmxmlsnippet type="LayoutObjectList"` format on the clipboard in FileMaker's internal clipboard format — not plain text. This skill has been tested with the **MBS Plugin** installed. Plugin-free clipboard conversion options are available in the FileMaker community and should work with this format, but have not been tested by Clockwork.
 
-If pasting into an existing layout, use key numbers above 1000 to avoid collision with existing object keys (FM reassigns keys on paste, but high numbers reduce the risk of unexpected behaviour).
-
 ---
 
 ## Companion skill
