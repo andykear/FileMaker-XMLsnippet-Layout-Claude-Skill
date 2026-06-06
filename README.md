@@ -128,7 +128,7 @@ Open an issue or PR and Andrew will investigate.
 
 ## About
 
-Created by Andrew Kear of [Clockwork Creative Technology](https://www.clockwork.co.uk)
+Created by Andrew Kear of [Clockwork Creative Technology](https://clockworkct.co.uk)
 
 If you're working on a FileMaker project and need expert help, get in touch.
 
