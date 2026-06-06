@@ -2,7 +2,7 @@
 
 A Claude skill that gives AI models a deterministic, empirically verified foundation for generating and analysing FileMaker Layout mode XML (`fmxmlsnippet type="LayoutObjectList"`).
 
-Developed by Clockwork Creative Technology and shared openly with the FileMaker/Claris community.
+Developed by Andrew Kear of Clockwork Creative Technology and shared openly with the FileMaker/Claris community.
 
 ---
 
