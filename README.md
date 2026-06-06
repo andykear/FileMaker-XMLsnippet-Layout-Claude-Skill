@@ -122,13 +122,13 @@ CC BY 4.0 — free to use, share, and adapt with attribution.
 
 ## Contributing
 
-Found an object structure that doesn't round-trip? Native export that contradicts the spec? Open an issue or PR and Andrew will investigate.
+Open an issue or PR and Andrew will investigate.
 
 ---
 
 ## About
 
-Created by Andrew Kear of [Clockwork Creative Technology](https://www.clockwork.co.uk), specialising in bespoke FileMaker development, automated artwork systems, and hosted FileMaker solutions.
+Created by Andrew Kear of [Clockwork Creative Technology](https://www.clockwork.co.uk)
 
 If you're working on a FileMaker project and need expert help, get in touch.
 
