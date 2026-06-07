@@ -58,7 +58,7 @@ references/
 - Minimal generation forms verified — `ExtendedAttributes`, `FullCSS`, `DDRInfo`, and `ParagraphStyleVector` confirmed as optional round-trip artifacts
 - `TextObj` flags=10 + CDATA encoding confirmed for merge fields
 - ButtonBar segment structure: correct flags, bounds offsets, `TextObj flags="2"`
-- TabControl: `TabControlObj` requires its own `Styles`; `TabPanelObj` must be included (not a round-trip artifact); `TitleCalc` comes after `TabPanelObj` and `Styles` in `TabPanel`
+- TabControl: `TabControlObj` requires its own `Styles`; `TabPanelObj` must be included (not a round-trip artifact) and carries attributes; element order in `TabPanel` is `Bounds` → `Styles` → `TitleCalc` → `TabPanelObj`
 - Popover element order confirmed: `Bounds` → `Styles` → `TitleCalc` → `PopoverObj`
 - ConditionalFormatting `Item flags` decoded: bits 0/1/2/7 = fill/text/icon/icon-only
 - HideCondition `findMode` attribute documented
