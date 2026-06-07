@@ -624,13 +624,13 @@ Element order in `PortalObj`: `TableAliasKey` → `SortList` → `FilterCalc` �
     </Styles>
     <Object type="TabPanel" key="2" LabelKey="0" flags="0" rotation="0">
       <Bounds top="0" left="0" bottom="350" right="590"/>
-      <TabPanelObj/>
       <Styles>
         <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
       </Styles>
       <TitleCalc>
         <Calculation><![CDATA["My Tab"]]></Calculation>
       </TitleCalc>
+      <TabPanelObj tabLeftEdge="0" tabWidth="100" tabPanelFlagSet="1"/>
     </Object>
   </TabControlObj>
   <Styles>
@@ -639,10 +639,10 @@ Element order in `PortalObj`: `TableAliasKey` → `SortList` → `FilterCalc` �
 </Object>
 ```
 
-Element order in `TabPanel`: `Bounds` → `TabPanelObj` → `Styles` → `TitleCalc`. ✓  
+Element order in `TabPanel`: `Bounds` → `Styles` → `TitleCalc` → `TabPanelObj`. ✓  
 `TabControlObj` requires its own `Styles` block before the panel objects. ✓  
 `TabPanelObj` **must be included** — observed in every production paste export across multiple solutions. ◎  
-Include as empty self-closing element: `<TabPanelObj/>`.
+`TabPanelObj` carries attributes — not empty: `tabLeftEdge`, `tabWidth`, `tabPanelFlagSet`. ✓
 
 **TabPanel content is NOT nested inside TabPanel elements.** Content objects are placed as layout siblings at absolute coordinates overlapping the TabControl bounds. ◎
 
