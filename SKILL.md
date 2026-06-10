@@ -1,3 +1,8 @@
+---
+name: filemaker-layout-xml
+description: Use this skill whenever the user wants to work with FileMaker layout XML. This includes generating paste-ready layout object XML (fmxmlsnippet type LayoutObjectList) from descriptions, reviewing layout XML for silent paste-handler failures, or analysing Save as XML layout exports. Trigger any time the user mentions FileMaker layouts, layout objects, fields, portals, tab controls, popovers, button bars, web viewers, or LayoutObjectList. Always perform the theme pre-flight before generating. Do not attempt FileMaker layout XML from memory alone.
+---
+
 # FileMaker Layout XML Skill
 
 This skill gives Claude a deterministic, empirically verified foundation for generating FileMaker layout object XML — the `fmxmlsnippet type="LayoutObjectList"` clipboard format used by FileMaker's Layout mode paste handler.
