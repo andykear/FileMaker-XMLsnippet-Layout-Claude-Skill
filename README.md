@@ -117,7 +117,14 @@ Layout mode requires the `fmxmlsnippet type="LayoutObjectList"` format on the cl
 
 ## Companion skill
 
-This skill covers layout objects. For FileMaker script generation, see the companion **FileMaker Script XML Skill**, which covers the `fmxmlsnippet type="FMObjectList"` format used by the Script Workspace.
+This skill covers layout objects.
+There are 3 companion skills covering Scripts, Field and Layout plus an XML inspector app.
+
+[FileMaker Script XML Skill](https://github.com/andykear/FileMaker-XMLsnippet-Claude-Skill) — script steps for the Script Workspace
+[FileMaker Layout XML Skill](https://github.com/andykear/FileMaker-XMLsnippet-Layout-Claude-Skill) — layout objects for Layout mode
+[FileMaker Field Definitions XML Skill ](https://github.com/andykear/FileMaker-XML-field-definitions) — field definitions for Manage Database
+
+[FileMaker XML Inspector](https://github.com/andykear/FileMaker-XML-inspector-open-source) - Browser based XML Inspector.
 
 ---
 
