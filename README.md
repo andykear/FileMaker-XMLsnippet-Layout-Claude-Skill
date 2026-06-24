@@ -1,5 +1,8 @@
 # FileMaker Layout XML Skill for Claude
 
+[![Stars](https://img.shields.io/github/stars/andykear/FileMaker-XMLsnippet-Layout-Claude-Skill?style=social)](https://github.com/andykear/FileMaker-XMLsnippet-Layout-Claude-Skill)
+[![License](https://img.shields.io/badge/license-CC%20BY%204.0-green)](https://creativecommons.org/licenses/by/4.0/)
+
 A Claude skill that gives AI models a deterministic, empirically verified foundation for generating and analysing FileMaker Layout mode XML (`fmxmlsnippet type="LayoutObjectList"`).
 
 Created by Andrew Kear of Clockwork Creative Technology and shared openly with the FileMaker/Claris community.
@@ -8,9 +11,9 @@ Created by Andrew Kear of Clockwork Creative Technology and shared openly with t
 
 ## The problem this solves
 
-FileMaker's Layout mode accepts layout objects via clipboard paste in a specific XML format. Without explicit knowledge of that format, AI models guess — and FileMaker pastes malformed objects silently, with no warning or error.
+FileMaker's Layout mode accepts layout objects via clipboard paste in a specific XML format. Without explicit knowledge of that format, AI models guess — and FileMaker pastes malformed objects silently.
 
-Effective AI-to-FileMaker workflows require a clear boundary between what AI should determine (the layout logic and content) and what must be deterministic (the XML structure). This skill provides the deterministic layer: a fully verified map of every object type, every element ordering constraint, every flag value, and the paste-handler rules that cause silent failures when violated.
+Effective AI-to-FileMaker workflows require a clear boundary between what AI should determine (the layout logic and content) and what must be deterministic (the XML structure). This skill provides that boundary.
 
 The XML shape is knowable. This spec makes it known.
 
@@ -18,7 +21,7 @@ The XML shape is knowable. This spec makes it known.
 
 ## Keeping AI focused on what it is good at
 
-AI models are generative by nature — they predict, they infer, they improvise. That is exactly what you want when reasoning about what fields belong on a layout and how they should be arranged. It is exactly what you do not want when element order determines whether FileMaker silently drops your objects.
+AI models are generative by nature — they predict, they infer, they improvise. That is exactly what you want when reasoning about what fields belong on a layout and how they should be arranged. It is the opposite of what you want when emitting XML element order or flag bit patterns.
 
 This skill keeps AI focused on what it is good at. The structure is handled deterministically. Claude handles the logic.
 
@@ -28,7 +31,7 @@ This skill keeps AI focused on what it is good at. The structure is handled dete
 
 This is not a prompt or a set of guidelines assembled from documentation. FileMaker publishes no formal specification for the `fmxmlsnippet` layout clipboard format.
 
-The specification was built entirely through empirical reverse-engineering: generate XML → paste into Layout mode → save → copy back out → diff against native output. Every object type, every attribute, every element ordering constraint was established through round-trip testing and validated against analysis of 45+ production layouts across 10 real-world applications.
+The specification was built entirely through empirical reverse-engineering: generate XML → paste into Layout mode → save → copy back out → diff against native output. Every object type, every flag bit, every element ordering rule confirmed through round-trip testing.
 
 Silent failure modes — where FileMaker accepts malformed XML and drops elements without any error — were systematically identified and documented.
 
@@ -42,7 +45,7 @@ The result is a formal specification for a format that Claris has never document
 SKILL.md                                   Claude skill definition
 README.md                                  This file
 references/
-  filemaker_layout_xml_rules.md            Full specification (v1.0, ~900 lines)
+  filemaker_layout_xml_rules.md            Full specification (v1.1, ~900 lines)
 ```
 
 ---
@@ -51,14 +54,14 @@ references/
 
 - All 18 layout object types documented with minimal generation examples
 - Element ordering constraints confirmed via round-trip — order matters and FM is silent about violations
-- Object `flags` bits decoded: bit 2 = HideCondition, bit 14 = sliding, bit 16 = named object, bit 24 = touch input mode, bits 28/29/30 = WebDirect rendering tier (safe to omit when generating), bit 31 = locked
+- Object `flags` bits decoded: bit 2 = HideCondition, bit 14 = sliding, bit 16 = named object, bit 24 = touch input mode, bits 28/29/30 = WebDirect rendering tier
 - `FieldObj` flags fully decoded: not-enterable, tab order, Quick Find, calendar button, auto-complete
 - `displayType` values confirmed for all control styles: edit box, drop-down list, pop-up menu, checkbox set, radio button set, drop-down calendar
 - `pictFormat` values confirmed for all container display modes
-- Minimal generation forms verified — `ExtendedAttributes`, `FullCSS`, `DDRInfo`, and `ParagraphStyleVector` confirmed as optional round-trip artifacts
+- Minimal generation forms verified — `ExtendedAttributes`, `FullCSS`, `DDRInfo`, `ParagraphStyleVector` confirmed as optional round-trip artifacts
 - `TextObj` flags=10 + CDATA encoding confirmed for merge fields
 - ButtonBar segment structure: correct flags, bounds offsets, `TextObj flags="2"`
-- TabControl: `TabControlObj` requires its own `Styles`; `TabPanelObj` must be included (not a round-trip artifact) and carries attributes; element order in `TabPanel` is `Bounds` → `Styles` → `TitleCalc` → `TabPanelObj`
+- TabControl: `TabControlObj` requires its own `Styles`; `TabPanelObj` must be included and carries attributes; element order in `TabPanel` is `Bounds` → `Styles` → `Calculation`
 - Popover element order confirmed: `Bounds` → `Styles` → `TitleCalc` → `PopoverObj`
 - ConditionalFormatting `Item flags` decoded: bits 0/1/2/7 = fill/text/icon/icon-only
 - HideCondition `findMode` attribute documented
@@ -79,7 +82,7 @@ references/
 - Claude (Pro, Team, or Enterprise)
 - Skills support enabled in your Claude organisation
 
-Tested with Claude. Model-agnostic by design — the deterministic approach means any capable model with the specification in context should produce reliable output. Claude is the only model Clockwork has verified against production layouts.
+Tested with Claude. Model-agnostic by design — the deterministic approach means any capable model with the specification in context should produce reliable output. Claude is the only model Clockwork has tested against; others have reported success.
 
 ---
 
@@ -111,22 +114,21 @@ Once the skill is installed, Claude will automatically apply it when you ask for
 
 ## Pasting into FileMaker
 
-Layout mode requires the `fmxmlsnippet type="LayoutObjectList"` format on the clipboard in FileMaker's internal clipboard format — not plain text. This skill has been tested with the **MBS Plugin** installed. Plugin-free clipboard conversion options are available in the FileMaker community and should work with this format, but have not been tested by Clockwork.
+Layout mode requires the `fmxmlsnippet type="LayoutObjectList"` format on the clipboard in FileMaker's internal clipboard format — not plain text. This skill has been tested with the **MBS Plugin** in FileMaker 2024 and 2025.
 
 ---
 
-## Companion skill
+## Companion skills
 
-This skill covers layout objects.
-There are 3 companion skills covering Scripts, Field and Layout plus an XML inspector app.
+This skill covers layout objects. There are three companion skills covering Scripts, Fields and Layouts, plus an XML inspector app.
 
 [FileMaker Script XML Skill](https://github.com/andykear/FileMaker-XMLsnippet-Claude-Skill) — script steps for the Script Workspace
 
-[FileMaker Layout XML Skill](https://github.com/andykear/FileMaker-XMLsnippet-Layout-Claude-Skill) — layout objects for Layout mode
+[FileMaker Field Definitions XML Skill](https://github.com/andykear/FileMaker-XML-field-definitions) — field definitions for Manage Database
 
-[FileMaker Field Definitions XML Skill ](https://github.com/andykear/FileMaker-XML-field-definitions) — field definitions for Manage Database
+[FileMaker XML Inspector](https://github.com/andykear/FileMaker-XML-inspector-open-source) — browser-based Save as XML analyser
 
-[FileMaker XML Inspector](https://github.com/andykear/FileMaker-XML-inspector-open-source) - Browser based XML Inspector.
+[FileMaker XML Scrubber](https://github.com/andykear/FileMaker-XML-scrubber) — redacts credentials before sharing with AI tools
 
 ---
 
@@ -154,5 +156,5 @@ If you're working on a FileMaker project and need expert help, get in touch.
 
 | Version | Notes |
 |---|---|
-| 1.1 | Extended corpus: 45+ layouts, 10 applications. Added ScriptTriggers, ToolTip, LabelCalc sections. CSS selectors table. portalFlags extended. TabPanelObj corrected (not a round-trip artifact — must include). Object flags bits 24/28/29/30 documented. rotation units confirmed. Theme pre-flight added. |
+| 1.1 | Extended corpus: 45+ layouts, 10 applications. Added ScriptTriggers, ToolTip, LabelCalc sections. CSS selectors table. portalFlags extended. TabPanelObj corrected (not a round-trip artifact). |
 | 1.0 | First public release. All 18 object types documented. Full round-trip verification across 35+ production layouts. |
