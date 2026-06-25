@@ -45,7 +45,7 @@ The result is a formal specification for a format that Claris has never document
 SKILL.md                                   Claude skill definition
 README.md                                  This file
 references/
-  filemaker_layout_xml_rules.md            Full specification (v1.1, ~900 lines)
+  filemaker_layout_xml_rules.md            Full specification (v2.0, ~1300 lines)
 ```
 
 ---
@@ -54,7 +54,7 @@ references/
 
 - All 18 layout object types documented with minimal generation examples
 - Element ordering constraints confirmed via round-trip — order matters and FM is silent about violations
-- Object `flags` bits decoded: bit 2 = HideCondition, bit 14 = sliding, bit 16 = named object, bit 24 = touch input mode, bits 28/29/30 = WebDirect rendering tier
+- Object `flags` bits decoded: bit 0 = ConditionalFormatting, bit 2 = HideCondition, bit 14 = ToolTip, bit 16 = named object, bit 24 = field access-state marker, bits 28/29/30 = WebDirect rendering tier
 - `FieldObj` flags fully decoded: not-enterable, tab order, Quick Find, calendar button, auto-complete
 - `displayType` values confirmed for all control styles: edit box, drop-down list, pop-up menu, checkbox set, radio button set, drop-down calendar
 - `pictFormat` values confirmed for all container display modes
@@ -107,8 +107,8 @@ Once the skill is installed, Claude will automatically apply it when you ask for
 **Review existing XML:**
 > Paste your fmxmlsnippet and ask Claude to check it for paste-handler errors
 
-**With a DDR:**
-> Attach your DDR export and Claude will use real field and relationship names from your solution
+**With a DDR or Save as XML export:**
+> Attach a DDR or a Save as XML export and Claude will use real field, table occurrence, and relationship names from your solution. Either works — both carry the schema.
 
 ---
 
@@ -156,5 +156,6 @@ If you're working on a FileMaker project and need expert help, get in touch.
 
 | Version | Notes |
 |---|---|
+| 2.0 | Theming and behavioural model. Added the LocalCSS/CustomStyles/FullCSS serialisation model and four cases, the complete Face character-attribute bitmask, the full script-trigger event table with object-type scoping, button icon embedded-SVG streams, button-bar LabelCalc, the FileMaker 2026 CanEntryCalc access-by-calculation element (generated elements confirmed to enforce), and theme independence proven across two themes. Element-order section refined to match round-trip output (see §21). |
 | 1.1 | Extended corpus: 45+ layouts, 10 applications. Added ScriptTriggers, ToolTip, LabelCalc sections. CSS selectors table. portalFlags extended. TabPanelObj corrected (not a round-trip artifact). |
 | 1.0 | First public release. All 18 object types documented. Full round-trip verification across 35+ production layouts. |
