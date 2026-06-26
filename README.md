@@ -119,6 +119,15 @@ Layout mode requires the `fmxmlsnippet type="LayoutObjectList"` format on the cl
 
 ---
 
+## Known limitation — layout retheming / local CSS removal
+
+Layout retheming is under active development and a primary goal. Reliably rethemeing a whole layout, stripping ad hoc LocalCSS overrides and rebinding objects to their proper named theme style, is not yet recommended for production layouts.
+The mechanics work: the whole layout round trips, non matched objects pass through verbatim, matched objects rebind. What is not yet settled is which objects should be treated as a match, and whether object types beyond fields and text behave the same way. Until that is proven across more layouts, treat retheme output as a draft to review, not a paste and trust result.
+When it lands it will ship with its own instruction guide. The workflow is involved enough to warrant separate documentation rather than a few usage lines here.
+This is the most challenging problem across all the repos and is being worked through deliberately rather than shipped early.
+
+---
+
 ## Companion skills
 
 This skill covers layout objects. There are three companion skills covering Scripts, Fields and Layouts, plus an XML inspector app.
