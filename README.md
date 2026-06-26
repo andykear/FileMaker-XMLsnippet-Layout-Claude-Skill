@@ -1,6 +1,7 @@
 # FileMaker Layout XML Skill for Claude
 
 [![Stars](https://img.shields.io/github/stars/andykear/FileMaker-XMLsnippet-Layout-Claude-Skill?style=social)](https://github.com/andykear/FileMaker-XMLsnippet-Layout-Claude-Skill)
+![GitHub last commit](https://img.shields.io/github/last-commit/andykear/FileMaker-XMLsnippet-Layout-Claude-Skill)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0-green)](https://creativecommons.org/licenses/by/4.0/)
 
 A Claude skill that gives AI models a deterministic, empirically verified foundation for generating and analysing FileMaker Layout mode XML (`fmxmlsnippet type="LayoutObjectList"`).
