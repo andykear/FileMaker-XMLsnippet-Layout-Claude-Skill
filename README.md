@@ -128,11 +128,13 @@ This is the most challenging problem across all the repos and is being worked th
 
 ---
 
-## Companion skills
+## Companion repos
 
-This skill covers layout objects. There are three companion skills covering Scripts, Fields and Layouts, plus an XML inspector app.
+Five open-source resources for the FileMaker/Claris community:
 
 [FileMaker Script XML Skill](https://github.com/andykear/FileMaker-XMLsnippet-Claude-Skill) — script steps for the Script Workspace
+
+[FileMaker Layout XML Skill](https://github.com/andykear/FileMaker-XMLsnippet-Layout-Claude-Skill) — layout objects for Layout mode
 
 [FileMaker Field Definitions XML Skill](https://github.com/andykear/FileMaker-XML-field-definitions) — field definitions for Manage Database
 
