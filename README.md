@@ -46,35 +46,14 @@ The result is a formal specification for a format that Claris has never document
 SKILL.md                                   Claude skill definition
 README.md                                  This file
 references/
-  filemaker_layout_xml_rules.md            Full specification (v2.0, ~1300 lines)
+  filemaker_layout_xml_rules.md            Full specification (v2.1, ~1400 lines)
 ```
 
 ---
 
 ## Specification highlights
 
-- All 18 layout object types documented with minimal generation examples
-- Element ordering constraints confirmed via round-trip — order matters and FM is silent about violations
-- Object `flags` bits decoded: bit 0 = ConditionalFormatting, bit 2 = HideCondition, bit 14 = ToolTip, bit 16 = named object, bit 24 = field access-state marker, bits 28/29/30 = WebDirect rendering tier
-- `FieldObj` flags fully decoded: not-enterable, tab order, Quick Find, calendar button, auto-complete
-- `displayType` values confirmed for all control styles: edit box, drop-down list, pop-up menu, checkbox set, radio button set, drop-down calendar
-- `pictFormat` values confirmed for all container display modes
-- Minimal generation forms verified — `ExtendedAttributes`, `FullCSS`, `DDRInfo`, `ParagraphStyleVector` confirmed as optional round-trip artifacts
-- `TextObj` flags=10 + CDATA encoding confirmed for merge fields
-- ButtonBar segment structure: correct flags, bounds offsets, `TextObj flags="2"`
-- TabControl: `TabControlObj` requires its own `Styles`; `TabPanelObj` must be included and carries attributes; element order in `TabPanel` is `Bounds` → `Styles` → `Calculation`
-- Popover element order confirmed: `Bounds` → `Styles` → `TitleCalc` → `PopoverObj`
-- ConditionalFormatting `Item flags` decoded: bits 0/1/2/7 = fill/text/icon/icon-only
-- HideCondition `findMode` attribute documented
-- WebViewer structure corrected: inner element is `ExternalObj` not `ExternalObjectObj`
-- `ScriptTriggers` documented with all four event types: OnObjectEnter, OnObjectExit, OnObjectModify, OnObjectSave
-- `ToolTip` element documented: Calculation-based, supports FM expressions
-- `LabelCalc` element documented: dynamic button labels with full FM expression support
-- CSS selectors documented: `.self`, `.text`, `.icon`, `.row`, `.row_alt`, `.row_active`, `.button_bar_divider`, `.contents`, `.inner_border`, `.repeat_border`, `.baseline`
-- `portalFlags` bit table extended with values 17, 56, 401
-- `rotation` units confirmed: tenths of degrees (900 = 90°)
-- Theme pre-flight: extract `ThemeName` from any uploaded XML before generating
-- Script step library cross-referenced to companion FileMaker Script XML Skill
+Covers all 18 layout object types, the full theming/CSS serialization model, and a multi-object Text paste corruption bug most AI-to-FileMaker tooling wouldn't catch — root cause identified and fixed. Full detail, with round-trip verification markers throughout, is in `references/filemaker_layout_xml_rules.md`.
 
 ---
 
@@ -119,8 +98,13 @@ Layout mode requires the `fmxmlsnippet type="LayoutObjectList"` format on the cl
 
 ---
 
-## Known limitation — layout retheming / local CSS removal
+## Multi-object Text/Button paste corruption and the fix
 
+Pasting two or more Text objects without an `ExtendedAttributes` block on each `TextObj` causes FileMaker to silently concatenate their text together at paste time. Always include a standard `ExtendedAttributes` block, matching the object's own `CharacterStyle` — confirmed clean at 2 and 3 objects in one paste with it present.
+
+`ButtonBar` segments, `GroupButton` children, and `PlaceholderText` fields share a related mechanism but haven't been directly retested with this fix — apply the same pattern to them as a precaution, and fall back to one object per paste if you need certainty. Full detail in `references/filemaker_layout_xml_rules.md` §31.
+
+## Known limitation — layout retheming / local CSS removal
 Layout retheming is under active development and a primary goal. Reliably rethemeing a whole layout, stripping ad hoc LocalCSS overrides and rebinding objects to their proper named theme style, is not yet recommended for production layouts.
 The mechanics work: the whole layout round trips, non matched objects pass through verbatim, matched objects rebind. What is not yet settled is which objects should be treated as a match, and whether object types beyond fields and text behave the same way. Until that is proven across more layouts, treat retheme output as a draft to review, not a paste and trust result.
 When it lands it will ship with its own instruction guide. The workflow is involved enough to warrant separate documentation rather than a few usage lines here.
@@ -168,6 +152,7 @@ If you're working on a FileMaker project and need expert help, get in touch.
 
 | Version | Notes |
 |---|---|
+| 2.1 | **We found a real FileMaker bug — and fixed it** (see "Multi-object Text/Button paste corruption and the fix" above). Plus: Portal behaviour completely re-verified end to end (several long-standing assumptions turned out wrong once actually tested), and a fresh batch of field/formatting rules confirmed. The most rigorously tested release yet. |
 | 2.0 | Theming and behavioural model. Added the LocalCSS/CustomStyles/FullCSS serialisation model and four cases, the complete Face character-attribute bitmask, the full script-trigger event table with object-type scoping, button icon embedded-SVG streams, button-bar LabelCalc, the FileMaker 2026 CanEntryCalc access-by-calculation element (generated elements confirmed to enforce), and theme independence proven across two themes. Element-order section refined to match round-trip output (see §21). |
 | 1.1 | Extended corpus: 45+ layouts, 10 applications. Added ScriptTriggers, ToolTip, LabelCalc sections. CSS selectors table. portalFlags extended. TabPanelObj corrected (not a round-trip artifact). |
 | 1.0 | First public release. All 18 object types documented. Full round-trip verification across 35+ production layouts. |

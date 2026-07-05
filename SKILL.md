@@ -18,6 +18,12 @@ When this skill is active, Claude will:
 - Analyse Save-as-XML exports to understand layout structure
 - Generate correctly ordered elements, correct flag values, and correct minimal structures — without guessing
 
+## Critical: always include ExtendedAttributes on generated Text/Button objects
+
+Pasting two or more Text objects without an `ExtendedAttributes` block on each `TextObj` causes FileMaker to silently concatenate their text together at paste time. Always include a standard `ExtendedAttributes` block (matching the object's own `CharacterStyle`) on every generated Text and Button object — confirmed to eliminate the corruption entirely at n=2 and n=3 objects in one paste. Never omit it, even for a single object — it costs nothing and removes the risk.
+
+`ButtonBar` segments, `GroupButton` children, and fields with `PlaceholderText` share a related mechanism but haven't been directly retested with this fix — apply the same `ExtendedAttributes` pattern to them as a precaution, and fall back to one object per paste if you need certainty. Full detail in `references/filemaker_layout_xml_rules.md` §31.
+
 ## Pre-flight: theme identification (mandatory)
 
 Every layout object must carry the correct `<ThemeName>` identifier. Using the wrong theme causes text doubling and CSS class names rendering as visible text when the XML is pasted.
