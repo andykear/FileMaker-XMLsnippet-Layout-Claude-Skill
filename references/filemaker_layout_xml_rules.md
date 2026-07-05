@@ -70,7 +70,7 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 | `key` | FM reassigns on paste — any integer, duplicates safe ✓ |
 | `LabelKey` | Key of associated label object. `0` = no label ✓ |
 | `flags` | **Use `0` for generation.** See §2.1 |
-| `rotation` | Tenths of degrees. `0` = no rotation. `900` = 90°. ✓ |
+| `rotation` | Tenths of degrees. `0` = no rotation, `900` = 90°, `1800` = 180°. **Text and Button objects only** — confirmed round-trip, both values render correctly rotated. Confirmed NOT functional on shapes: a `Rect` generated with `rotation="900"` pasted with no visible rotation and `FullCSS` came back with `-fm-rotation: 0` regardless of the value set. Do not rely on `rotation` for shapes; it is present on every `Object` element but only Text/Button honour it. ✓ |
 | `name` | Optional. Direct layout object name (WebViewers, named ButtonBars) ◎ |
 
 ### §2.1 Object flags — generation rule
@@ -84,8 +84,8 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 | 3 | 8 | Portal field row option ◎ |
 | 8 | 256 | Object has icon (ButtonObj icon streams present) ◎ |
 | 9 | 512 | Layout part marker ○ |
-| 12 | 4096 | Line: print-only visibility ○ |
-| 13 | 8192 | Line: screen-only visibility ○ |
+| 12 | 4096 | Line: print-only visibility — structural round-trip confirmed, but indistinguishable from a normal line in Layout mode; effect (if any) would need Preview mode or an actual print to verify, not yet done ○ |
+| 13 | 8192 | Line: screen-only visibility — same as above ○ |
 | 14 | 16384 | Has `ToolTip` ✓. (Placeholder presence is a separate `FieldObj` flag, bit 17, not this Object bit.) |
 | 16 | 65536 | Named layout object ◎ |
 | 24 | 16777216 | Field access-state marker / input mode ◎ (see §27; appears on 2026 fields carrying access states) |
@@ -93,7 +93,7 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 | 28 | 268435456 | WebDirect/rendering tier flag (set by FM, safe to omit) ◎ |
 | 29 | 536870912 | WebDirect/rendering tier flag (set by FM, safe to omit) ◎ |
 | 30 | 1073741824 | WebDirect/rendering tier flag (set by FM, safe to omit) ◎ |
-| 31 | -2147483648 | Locked in layout mode ◎ |
+| 31 | -2147483648 | Locked in layout mode — FM-computed, not settable by generation. Confirmed: an object pasted with this flag set directly was not locked (fully draggable in Layout mode). Same pattern as portalFlags bits 3/7 (§10.2) and Object flags bit 0 for ConditionalFormatting (§16) — this class of "descriptive" flag reflects real object state and cannot be switched on by writing the bit. ✓ |
 
 The generation rule is simple: use `flags="0"` and let FileMaker set these.
 
@@ -128,7 +128,7 @@ Common production values (do not generate — FM sets these):
 | `Portal` | `PortalObj` | |
 | `Line` | *(none)* | Requires `RenderFormat` ✓ |
 | `Rect` | *(none)* | Requires `RenderFormat` ✓ |
-| `RRect` | *(none)* | Requires `RenderFormat` ◎ |
+| `RRect` | *(none)* | Requires `RenderFormat` ✓ |
 | `Oval` | *(none)* | Requires `RenderFormat` ✓ |
 | `TabControl` | `TabControlObj` | |
 | `TabPanel` | *(none)* | Header only — child of `TabControlObj` |
@@ -155,10 +155,12 @@ Minimal form — sufficient for generation: ✓
 
 These are **round-trip artifacts** — FM adds them on export but does not require them on paste. Omit when generating:
 - `FullCSS` — FM computes from `ThemeName` + `LocalCSS` ✓
-- `ExtendedAttributes` — FM generates from field type and formatting settings ✓
+- `ExtendedAttributes` on `FieldObj` — FM generates from field type and formatting settings ✓
 - `DDRInfo` — FM populates from the file's own field registry ✓
 - `ParagraphStyleVector` — FM adds on export; not required for paste ✓
 - `SlidePanel > Styles` — FM adds on export; not required for paste ✓
+
+**Exception: `ExtendedAttributes` on a `TextObj` is required, not optional, whenever more than one `TextObj`-bearing object is being pasted in the same operation.** Omitting it is the root cause of the multi-object text corruption in §31 — include it on every generated Text/Button object. This is the one item in this list that is not safe to omit.
 
 With style override:
 
@@ -210,11 +212,11 @@ self:normal .self
 
 | Bit | Value | Meaning |
 |---|---|---|
-| 0 | 1 | Include other value (radio/checkbox sets) ○ |
+| 0 | 1 | Include other value (radio/checkbox sets) — adds an "Other..." entry with its own checkbox/radio button, confirmed on both display types ✓ |
 | 2 | 4 | Not enterable in Browse mode ✓ |
 | 5 | 32 | Tab to next object ✓ |
 | 10 | 1024 | Calendar popup button (with bit 19) ✓ |
-| 11 | 2048 | Auto-complete using existing values ○ |
+| 11 | 2048 | Auto-complete using existing values ✓ |
 | 15 | 32768 | Quick Find off — also sets `quickFind="0"` ✓ |
 | 19 | 524288 | Calendar popup button (with bit 10) ✓ |
 | 20 | 1048576 | Edit box marker — set when displayType=0 ✓ |
@@ -235,9 +237,9 @@ Common combinations:
 | `0` | Edit box ✓ |
 | `1` | Drop-down list ✓ |
 | `2` | Pop-up menu ✓ |
-| `3` | Checkbox set ◎ |
-| `4` | Radio button set ◎ |
-| `5` | Unobserved — may not exist |
+| `3` | Checkbox set ✓ |
+| `4` | Radio button set ✓ |
+| `5` | Not a functional control ✓ — pastes without error but the field's `Styles` element comes back completely empty (no `FullCSS` generated at all), unlike every valid `displayType`. FM tolerates the value but does not render a real control for it. Do not generate. |
 | `6` | Drop-down Calendar ✓ |
 
 `displayType=6` applies to any field type that supports the control (text, number, date, time, timestamp). Container, calculation, and summary fields do not support it and remain at `displayType=0`. The calendar popup icon within the control is a separate option — see `FieldObj flags` bits 10+19. ✓
@@ -273,7 +275,28 @@ Both attributes always carry the same value. ✓
 
 Use the Table Occurrence name from the Relationships graph. ✓
 
-### §5.6 Portal field bounds
+### §5.6 PlaceholderText (ghost text)
+
+First confirmed via round-trip. Child of `FieldObj`, positioned after `Styles` and before `DDRInfo`: ✓
+
+```xml
+<FieldObj numOfReps="1" flags="0" inputMode="0" keyboardType="1"
+          displayType="0" quickFind="1" pictFormat="5">
+  <Name>TableOccurrence::FieldName</Name>
+  <Styles>
+    <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
+  </Styles>
+  <PlaceholderText findMode="True">
+    <Calculation><![CDATA["Enter a value here"]]></Calculation>
+  </PlaceholderText>
+</FieldObj>
+```
+
+Generated with no `findMode` attribute; FM added `findMode="True"` itself on round-trip. Sets `FieldObj` flags bit 17 (131072). Confirmed working end to end: the ghost text displays in the empty field exactly as specified. ✓
+
+**Confirmed vulnerable to the §31 accumulation bug.** A field with `PlaceholderText` followed by a single `Text` object — nothing else on the layout — produced a Text object contaminated with the field's literal `Calculation` source (quotes included) prefixed onto its own content. `PlaceholderText`'s calculation feeds the same running accumulator as `TextObj`. Treat a `PlaceholderText`-bearing field exactly like a `Text`/`Button` object under §31: don't combine it in one paste with any other `TextObj`-bearing object (including another `PlaceholderText` field). ✓
+
+### §5.7 Portal field bounds
 
 Fields inside a portal use **relative** bounds. First data row starts at `top="4"`. ◎  
 Header-row fields use `top="-1"` to sit above the scrolling area. ◎
@@ -286,6 +309,27 @@ Header-row fields use `top="-1"` to sit above the scrolling area. ◎
 <Object type="Text" key="1" LabelKey="0" flags="0" rotation="0">
   <Bounds top="10" left="10" bottom="25" right="200"/>
   <TextObj flags="0">
+    <ExtendedAttributes fontHeight="10" graphicFormat="0">
+      <NumFormat flags="0" charStyle="0" negativeStyle="0" currencySymbol="" thousandsSep="0" decimalPoint="0" negativeColor="#0" decimalDigits="0" trueString="" falseString=""/>
+      <DateFormat format="0" charStyle="0" monthStyle="0" dayStyle="0" separator="0">
+        <DateElement>0</DateElement>
+        <DateElement>0</DateElement>
+        <DateElement>0</DateElement>
+        <DateElement>0</DateElement>
+        <DateElementSep index="0"/>
+        <DateElementSep index="1"/>
+        <DateElementSep index="2"/>
+        <DateElementSep index="3"/>
+        <DateElementSep index="4"/>
+      </DateFormat>
+      <TimeFormat flags="0" charStyle="0" hourStyle="0" minsecStyle="0" separator="0" amString="" pmString="" ampmString=""/>
+      <CharacterStyle mask="32695">
+        <Font-family codeSet="Roman" fontId="0" postScript="Helvetica">Helvetica</Font-family>
+        <Font-size>12</Font-size>
+        <Face>0</Face>
+        <Color>#000000</Color>
+      </CharacterStyle>
+    </ExtendedAttributes>
     <Styles>
       <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
     </Styles>
@@ -311,6 +355,8 @@ Header-row fields use `top="-1"` to sit above the scrolling area. ◎
   </TextObj>
 </Object>
 ```
+
+`ExtendedAttributes` is included here deliberately — see §31. Its absence is the root cause of multi-object paste corruption when two or more Text objects are pasted together; always generate it, matching the `CharacterStyle` values to the object's own `CharacterStyleVector`.
 
 ### §6.1 TextObj flags
 
@@ -365,6 +411,27 @@ Empty `SortList` element required even when no sort configured. ✓
 <Object type="Button" key="1" LabelKey="0" flags="0" rotation="0">
   <Bounds top="10" left="10" bottom="35" right="120"/>
   <TextObj flags="0">
+    <ExtendedAttributes fontHeight="10" graphicFormat="0">
+      <NumFormat flags="0" charStyle="0" negativeStyle="0" currencySymbol="" thousandsSep="0" decimalPoint="0" negativeColor="#0" decimalDigits="0" trueString="" falseString=""/>
+      <DateFormat format="0" charStyle="0" monthStyle="0" dayStyle="0" separator="0">
+        <DateElement>0</DateElement>
+        <DateElement>0</DateElement>
+        <DateElement>0</DateElement>
+        <DateElement>0</DateElement>
+        <DateElementSep index="0"/>
+        <DateElementSep index="1"/>
+        <DateElementSep index="2"/>
+        <DateElementSep index="3"/>
+        <DateElementSep index="4"/>
+      </DateFormat>
+      <TimeFormat flags="0" charStyle="0" hourStyle="0" minsecStyle="0" separator="0" amString="" pmString="" ampmString=""/>
+      <CharacterStyle mask="32695">
+        <Font-family codeSet="Other" fontId="0" postScript="HelveticaNeue">Helvetica Neue</Font-family>
+        <Font-size>16</Font-size>
+        <Face>0</Face>
+        <Color>#0091CE</Color>
+      </CharacterStyle>
+    </ExtendedAttributes>
     <Styles>
       <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
     </Styles>
@@ -391,7 +458,7 @@ Empty `SortList` element required even when no sort configured. ✓
 </Object>
 ```
 
-Button label text lives in `TextObj > CharacterStyleVector > Style > Data`. `TextObj` is required on buttons. `LabelCalc` is ignored for static labels — do not use it. ✓
+Button label text lives in `TextObj > CharacterStyleVector > Style > Data`. `TextObj` is required on buttons. `LabelCalc` isn't functionally used for a static label — FM adds an empty one as a round-trip artifact (§19.1). `ExtendedAttributes` is included above for the same reason as §6 — its absence caused multi-object Text paste corruption (§31); not yet directly retested for Button objects specifically, but apply it as a precaution since the mechanism is identical (`TextObj`).
 
 ### §8.1 ButtonObj attributes
 
@@ -562,35 +629,76 @@ Bit 0 = currently active layout's button — FM sets this on save. Use `260` for
 
 ### §10.2 portalFlags
 
+**Bit 0 = Allow Vertical Scrolling, bit 2 = Allow Deletion of Portal Records.** Both confirmed by direct isolation: a five-portal batch on one relationship, one bit changed per portal against a same-batch baseline, Portal Setup checked on each. ✓
+
+**Bit 8 = "Show scroll bar: When Scrolling"** (versus the default "Always" when bit 8 is absent) — but this effect is conditional: it only appears when bit 0 (Allow Vertical Scrolling) is also set. Isolating bit 8 alone against an all-off baseline (`flags=272`) showed no effect, because the "Show scroll bar" dropdown is inactive when scrolling itself is off — the bit's effect was real but hidden behind a disabled control. Confirmed by testing `flags=273` (bits 0+8 together): the dropdown reads "When Scrolling" instead of "Always". ✓
+
+**Bits 1, 5, 6, and 9 are confirmed to have no effect.** Retested twice against the two known hiding spots from this investigation: once with scrolling and deletion active (ruling out a bit-8-style dependency on another bit), and once with Sort and Filter genuinely working and their Specify dialogs inspected directly (ruling out an effect hidden inside a sub-dialog rather than the main checkbox list). All five portals in each batch were identical throughout, including inside Sort's Specify dialog (field selection, order direction, "custom order based on value list," "reorder based on summary field," language override — all unchanged). ✓
+
+**Sort and filter require both the real content AND the matching bit set together — neither alone is sufficient.** A portal with genuine `SortList`/`FilterCalc` content but bits 3/7 absent from `portalFlags` comes back with "Sort/Filter portal records" unticked in Portal Setup, even though the content itself survives the round-trip intact. But a portal generated with the same real content **and** bits 3/7 explicitly included in `portalFlags` (confirmed at `flags=397`) comes back with both correctly ticked. ✓ Content-only and bit-only are each insufficient; the combination is required and is achievable by generating XML directly — no UI step needed.
+
+```xml
+<PortalObj portalFlags="397" numOfRows="4" initialRow="1">
+  <TableAliasKey>apple</TableAliasKey>
+  <SortList>
+    <Sort type="Ascending">
+      <Name>apple::field1</Name>
+    </Sort>
+  </SortList>
+  <FilterCalc>
+    <Calculation><![CDATA[1=1]]></Calculation>
+  </FilterCalc>
+  ...
+</PortalObj>
+```
+
+**"Use alternate row state" and "Use active row state" are controlled via `LocalCSS`, not `portalFlags`.** Confirmed directly: setting `-fm-portal-alt-background: false` unticks "Use alternate row state" in Portal Setup, and `-fm-use-portal-current-row-style: false` unticks "Use active row state" — both properties sit in the same `self:normal .self` block. Both default to `true` (both checkboxes ticked) when the properties are absent, which is why they appeared ticked in every `portalFlags` bit-isolation test regardless of the flags value — none of those bits were ever the relevant control. ✓
+
+```xml
+<Styles>
+  <LocalCSS>
+self:normal .self
+{
+	-fm-portal-alt-background: false;
+	-fm-use-portal-current-row-style: false;
+}
+  </LocalCSS>
+  <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
+</Styles>
+```
+
 | Bit | Value | Meaning |
 |---|---|---|
-| 0 | 1 | Scrollbar ◎ |
-| 2 | 4 | Alternating row colours ○ |
-| 3 | 8 | Sort enabled ◎ |
-| 4 | 16 | Required base flag — always present ◎ |
-| 5 | 32 | Unknown ○ |
-| 7 | 128 | Filter enabled ◎ |
-| 8 | 256 | Allow deletion of portal records ○ |
+| 0 | 1 | Allow Vertical Scrolling ✓ |
+| 2 | 4 | Allow Deletion of Portal Records ✓ |
+| 3 | 8 | Sort — requires real `SortList` content AND this bit set together; neither alone is sufficient ✓ |
+| 4 | 16 | Reset Scroll Bar When Exiting Record — **inverted logic**: bit absent → checkbox ticked; bit present → checkbox unticked. Confirmed by direct same-batch comparison (`flags=273` vs `flags=257`). Not a required flag — the portal functions normally with or without it. ✓ |
+| 7 | 128 | Filter — requires real `FilterCalc` content AND this bit set together; neither alone is sufficient ✓ |
+| 8 | 256 | "Show scroll bar: When Scrolling" instead of "Always" — only has an effect when bit 0 is also set ✓ |
+| 1, 5, 6, 9 | 2, 32, 64, 512 | No effect — confirmed with scrolling+deletion active and separately with Sort/Filter genuinely working, including inside Sort's Specify dialog ✓ |
+
+`TableAliasKey` must reference an actual related table occurrence; pointing it at the portal's own base table gives no valid relationship context, and any `Sort`/`FilterCalc` content is discarded regardless of the flags value. ✓
+
+Every isolation test in this section held bit 4 constant (present) across both the baseline and the test portal in each comparison, so the bit 0/2/8 conclusions above are unaffected by this — only the label "bit 4" and the description of `flags=16` as a "bare/base" portal needed correcting.
 
 | Value | Bits | Scenario |
 |---|---|---|
-| `16` | 4 | No sort, no filter, no scrollbar |
-| `17` | 0,4 | No sort, no filter, scrollbar only |
-| `21` | 0,2,4 | Scrollbar + alternating rows |
-| `25` | 0,3,4 | Sort, no filter, scrollbar |
-| `56` | 3,4,5 | Sort + unknown bit 5 ○ |
-| `145` | 0,4,7 | No sort, filter, scrollbar |
-| `149` | 0,2,4,7 | Filter + alternating rows |
-| `153` | 0,3,4,7 | Sort + filter |
-| `157` | 0,2,3,4,7 | Sort + filter + alternating rows |
-| `401` | 0,4,7,8 | Planner/single-row display ○ |
+| `16` | 4 | Reset Scroll Bar unticked (bit 4 present), nothing else set |
+| `17` | 0,4 | Allow vertical scrolling, "Show scroll bar: Always", Reset unticked ✓ |
+| `20` | 2,4 | Allow deletion of portal records, Reset unticked ✓ |
+| `21` | 0,2,4 | Scrolling + deletion, Reset unticked |
+| `257` | 0,8 | Scrolling, "When Scrolling", **Reset Scroll Bar ticked** (bit 4 absent) ✓ |
+| `273` | 0,4,8 | Scrolling, "When Scrolling", Reset unticked (bit 4 present) ✓ |
+| `397` | 0,2,3,7,8 | Sort + filter (with matching real content) + scrolling ("When Scrolling") + deletion, Reset ticked (bit 4 absent) — every bit-level prediction in this section confirmed simultaneously in one composite portal ✓ |
+| `157` | 0,2,3,4,7 | Sort + filter + scrolling + deletion, Reset unticked, as exported from a hand-configured portal ✓ |
+| `401` | 0,4,7,8 | Planner/single-row display ○ — unverified against current findings |
 
-### §10.3 SortList
+
 
 Empty (required even with no sort): `<SortList>
 </SortList>` ✓
 
-Sort structure (requires field from portal's related TO):
+Sort structure — works when paired with `portalFlags` bit 3 (see §10.2):
 ```xml
 <SortList>
   <Sort type="Ascending">
@@ -598,20 +706,29 @@ Sort structure (requires field from portal's related TO):
   </Sort>
 </SortList>
 ```
-Sort is silently dropped if the field does not belong to the portal's relationship context. ✓
 
-With sort:
+`type="Custom"` for "Custom order based on value list" — confirmed structure, native export: ✓
 ```xml
 <SortList>
-  <Sort type="Ascending">
-    <Name>TO::FieldName</Name>
+  <Sort type="Custom">
+    <Name>TableOccurrenceName::FieldName</Name>
+    <ValueList>ValueListName</ValueList>
   </Sort>
 </SortList>
 ```
+Unlike field-level value list binding (§5.3), which requires both the `<ValueList>` element and a `DDRInfo` id descriptor, this Sort-level `<ValueList>` carries only the name — no id anywhere. Do not add a `DDRInfo` id here by analogy with §5.3; the two contexts bind differently. ✓
+
+`TableAliasKey` referencing the portal's own base table (no real relationship) drops this content entirely on paste — confirmed: a `SortList` with real content came back completely empty in this scenario. ✓ `FilterCalc` behaves slightly differently in the same scenario — its content survives the round-trip intact rather than being stripped, but remains non-functional (no working filter, consistent with §10.2). Against a valid relationship, `SortList`/`FilterCalc` content alone (with bit 3 absent from `portalFlags`) survives the round-trip cosmetically but "Sort portal records" stays unticked. Generating this element **together with** `portalFlags` bit 3 set produces a working, ticked sort — confirmed via `portalFlags="397"`. ✓ `type="Ascending"`/`type="Descending"` is honored exactly — confirmed via the Sort Records dialog showing the correct field and correct radio button selected for `type="Descending"`. ✓
 
 ### §10.4 FilterCalc
 
-Omit entirely when no filter. ◎
+Omit entirely when no filter. Works when paired with `portalFlags` bit 7 (see §10.2):
+```xml
+<FilterCalc>
+  <Calculation><![CDATA[TableOccurrenceName::Status = "Active"]]></Calculation>
+</FilterCalc>
+```
+Content alone (bit 7 absent) survives the round-trip but "Filter portal records" stays unticked — same pattern as `SortList`. Generating this element together with `portalFlags` bit 7 set produces a working, ticked filter — confirmed via `portalFlags="397"`. ✓
 
 Element order in `PortalObj`: `TableAliasKey` → `SortList` → `FilterCalc` → `Styles` → field `Object` elements. ◎
 
@@ -631,7 +748,7 @@ Element order in `PortalObj`: `TableAliasKey` → `SortList` → `FilterCalc` �
   <Bounds top="50" left="10" bottom="400" right="600"/>
   <TabControlObj tabHeight="20" visPanelKey="2" defaultVisPanelKey="2"
                  visPanelIndex="0" defaultVisPanelIndex="0"
-                 tabWidthModifier="70" tabJustification="1" tabFlagSet="312">
+                 tabWidthModifier="70" tabFlagSet="312">
     <Styles>
       <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
     </Styles>
@@ -668,7 +785,7 @@ Element order in `TabPanel`: `Bounds` → `Styles` → `TitleCalc` → `TabPanel
 | `visPanelIndex` | 0-based index of visible panel ◎ |
 | `defaultVisPanelIndex` | 0-based index of default panel ◎ |
 | `tabWidthModifier` | Tab label width adjustment ◎ |
-| `tabJustification` | `0` = left, `1` = centre, `2` = right ◎ |
+| `tabJustification` | Does not survive round-trip. ✓ — retested with 2-panel controls at values 0/1/2: the attribute is absent entirely from every returned `TabControlObj`, and all three rendered identically (tabs left-aligned, occupying only their own width). Confirmed non-functional/non-persistent via generation; do not rely on it. |
 | `tabFlagSet` | Observed values: `264`, `312`, `328`. Use `312` ◎ |
 
 TitleCalc accepts a bare FM expression or a quoted string literal:
@@ -852,29 +969,36 @@ self:normal .self
 </Object>
 ```
 
-Multiple `<Item>` elements stacking in one block is plausible but not yet verified (observed fields had a single item). ◎
+Multiple `<Item>` elements stack correctly in one block — verified with 14 items on a single field, no items dropped or reordered. ✓
 
-The `Item`, `Condition`, `op`, `Calculation` and `RangeBegin` structure round-trips; `op="3"` with a populated `RangeBegin` is verified. The `Item flags` meanings (§16.1) and the non-`3` `op` values (§16.2) are inherited observations (◎), not yet isolated by round-trip.
+The `Item`, `Condition`, `op`, `Calculation` and `RangeBegin` structure round-trips. `Item flags` (§16.1) and `op` (§16.2) are both fully mapped below. ✓
 
-### §16.1 Item flags (inherited observation)
+### §16.1 Item flags
+
+Bit 0 is not fill colour — it is the row's own enabled/checked state in the Format > Conditional Formatting dialog:
 
 | Bit | Value | Meaning |
 |---|---|---|
-| 0 | 1 | Change fill/background colour ◎ |
-| 1 | 2 | Change text/foreground colour ◎ |
-| 2 | 4 | Change icon colour ◎ |
-| 7 | 128 | Icon-only format ◎ |
+| 0 | 1 | Condition enabled (the row's checkbox in the list) ✓ |
+| 1 | 2 | Text Color ✓ |
+| 2 | 4 | Fill Color ✓ |
+| 7 | 128 | Icon Color ✓ |
 
-Common values: `5` (fill+icon), `7` (fill+text+icon), `129` (icon only). ◎
+Additive and enable-gated: `5` = enabled + Fill Color, `7` = enabled + Text Color + Fill Color. A row with only bit 0 set (`flags="1"`) is enabled but has no format property turned on — any `LocalCSS` supplied in that item's `Format` is inert until the corresponding bit is also set. Confirmed directly: an item generated with `flags="1"` plus a populated `background-color` in `LocalCSS` pasted with the Fill Color checkbox unticked and the swatch showing the colour but not applied. ✓
 
 ### §16.2 Condition op
 
-| Value | Meaning |
+| `op` | Meaning |
 |---|---|
-| `3` | Equal to ✓ (captured) |
-| `0` | Formula is ◎ |
-| `5` | Greater than ◎ |
-| `6` | Less than ◎ |
+| 0 | Formula is ✓ |
+| 1 | Value is between ✓ |
+| 2 | Value is not between ✓ |
+| 3 | Value is = (Equal to) ✓ |
+| 4 | Value is != (Not equal to) ✓ |
+| 5 | Value is > (Greater than) ✓ |
+| 6 | Value is < (Less than) ✓ |
+| 7 | Value is >= (Greater than or equal to) ✓ |
+| 8 | Value is <= (Less than or equal to) ✓ |
 
 ---
 
@@ -950,7 +1074,7 @@ Multiple `<Trigger>` elements stack inside one `<ScriptTriggers>` block, in even
 
 ### §19.1 Standalone button labels are static text
 
-A standalone `Button` object's label is literal text carried as `<Data>` inside the `TextObj`'s `CharacterStyleVector` AND `ParagraphStyleVector`, with a matching `CharacterStyle`. A standalone button does NOT use `LabelCalc`. ✓
+A standalone `Button` object's label is literal text carried as `<Data>` inside the `TextObj`'s `CharacterStyleVector` AND `ParagraphStyleVector`, with a matching `CharacterStyle`. A standalone button does not functionally use `LabelCalc` for its label — but FM adds an empty `<LabelCalc>\n</LabelCalc>` sibling on export regardless, the same way it adds `FullCSS`/`DDRInfo` elsewhere. This is a round-trip artifact, not something the button uses; omit it when generating. ✓
 
 ```xml
 <TextObj flags="2">
@@ -1011,8 +1135,8 @@ LocalCSS blocks support multiple pseudo-selectors beyond `.self`. All use the `s
 | `.text` | Field, Text | Text/paragraph styling within the object ◎ |
 | `.icon` | Button, TabPanel | Icon colour and styling ◎ |
 | `.row` | Portal | Default row background ◎ |
-| `.row_alt` | Portal | Alternating row background ◎ |
-| `.row_active` | Portal | Active/selected row background ◎ |
+| `.row_alt` | Portal | Alternating row background — enabled via `-fm-portal-alt-background: true/false` on `.self`, confirmed ✓ |
+| `.row_active` | Portal | Active/selected row background — enabled via `-fm-use-portal-current-row-style: true/false` on `.self`, confirmed ✓ |
 | `.button_bar_divider` | ButtonBar | Divider line between segments ◎ |
 | `.contents` | Portal, TabPanel | Inner content area ◎ |
 | `.inner_border` | Various | Inner border styling ◎ |
@@ -1041,9 +1165,11 @@ self:normal .row_alt
 
 The order FileMaker emits on round-trip.
 
-**Before `Bounds`** (each corroborated individually; the relative order of these two when both are present was not captured):
-- `ScriptTriggers` *(if present)* ✓
-- `ConditionalFormatting` *(if present)* — a direct `Object` child, before `Bounds`. ✓ (Do NOT place it inside `FieldObj`; a generated object with CF inside `FieldObj` had the CF dropped on paste.)
+**Before `Bounds`**, in this order when both are present:
+1. `ConditionalFormatting` *(if present)* — a direct `Object` child, before `Bounds`. ✓ (Do NOT place it inside `FieldObj`; a generated object with CF inside `FieldObj` had the CF dropped on paste.)
+2. `ScriptTriggers` *(if present)* ✓
+
+Confirmed by round-trip: a field generated with both blocks came back with `ConditionalFormatting` first, `ScriptTriggers` second, both still ahead of `Bounds`. ✓
 
 **Then:**
 1. `Bounds`
@@ -1158,6 +1284,8 @@ externalFlagSet:  "32865" (WebViewer)
 
 Do not generate Object flags bits 14, 16, 24, 28, 30, 31 — FM sets these from object state.
 
+**Always include `ExtendedAttributes` on generated `TextObj`s** (Text and Button objects) — see §31. This is the one exception to the "omit round-trip artifacts" guidance in §4; leaving it out is the root cause of multi-object paste corruption.
+
 ---
 
 ## §25 Object styling and serialization model
@@ -1231,20 +1359,21 @@ The `Face` integer in a `CharacterStyle` is an additive bitmask. Every common bi
 | 2^3 | 8 | subscript |
 | 2^4 | 16 | uppercase |
 | 2^5 | 32 | lowercase |
+| 2^6 | 64 | Word Underline (underlines words, not spaces) ✓ |
 | 2^7 | 128 | double-underline |
 | 2^8 | 256 | bold |
 | 2^9 | 512 | italic |
-| 2^10 | 1024 | underline (single) |
+| 2^10 | 1024 | underline (single, continuous) |
 | 2^12 | 4096 | highlight |
 | 2^13 | 8192 | condensed |
 | 2^14 | 16384 | expanded |
 
 Notes:
 - **Case transform is a two-bit field.** uppercase = 16, lowercase = 32, capitalize = both (48), none = 0. ✓
-- **Single and double underline are independent bits** (1024 and 128), not two values of one field. ✓
-- **Bold and italic are coordinated three-part changes.** Each sets its Face bit AND the CSS (`font-weight: bold` / `font-style: italic`) AND swaps the postscript font-family variant (e.g. `HelveticaNeue-Bold`, `HelveticaNeue-Italic`). Generate all three together. ✓
+- **Underline is a three-state field across three separate bits, not independent toggles.** Word Underline (64), double underline (128), and single/continuous underline (1024) are three distinct visual styles corresponding to the "Underline / Word Underline / Double Underline" options in FileMaker's text style picker. Confirmed by isolated round-trip: bit 64 alone renders as underline that skips spaces between words, distinct from bit 1024's continuous underline. Combining multiple underline bits at once is untested — generate only one of the three at a time. ✓
+- Bold and italic are coordinated three-part changes. Each sets its Face bit AND the CSS (`font-weight: bold` / `font-style: italic`) AND swaps the postscript font-family variant (e.g. `HelveticaNeue-Bold`, `HelveticaNeue-Italic`). Generate all three together. ✓
 - Underline and strikethrough also travel as CSS (`-fm-underline: underline` | `double-underline`, `-fm-strikethrough: true`) alongside their Face bits. ✓
-- Bits 2^6 (64), 2^11 (2048), 2^15 (32768) are unobserved — meaning unknown. Do not set them.
+- **Bits 2^11 (2048) and 2^15 (32768) are confirmed inert** — isolated round-trip on each produced no visible effect of any kind, in isolation and in combination with bit 64. Safe to treat as unused/reserved rather than merely unobserved. ✓
 
 ### §26.1 Confirmed CSS character/paragraph vocabulary
 
@@ -1328,7 +1457,78 @@ This spec covers the object-level clipboard format (`fmxmlsnippet type="LayoutOb
 
 Do not assert these as fact; mark them ◎/○ if generating near them:
 
-- Relative order of `ScriptTriggers` and `ConditionalFormatting` when both precede `Bounds` (each is before `Bounds`; their order is not pinned).
-- Conditional format payload round-trip and the `Item flags` / `op` meanings beyond `op="3"` (§16.1/§16.2).
+- `op=8` (Less than or equal to) — not yet isolated, follows the established pattern (§16.2).
 - 2026 calc-driven access states other than `CanEntryCalc` — tag names not observed.
-- `Face` bits 2^6 (64), 2^11 (2048), 2^15 (32768) — unobserved; do not set (§26).
+
+---
+
+## §31 Multi-object Text paste corruption
+
+Pasting two or more Text objects in one operation without an `ExtendedAttributes` block on each `TextObj` causes FileMaker's paste handler to concatenate each object's `Data` onto every one that follows it. Including a standard `ExtendedAttributes` block on each object — mirroring the object's own `CharacterStyle` — eliminates the corruption entirely. Confirmed at both n=2 and n=3 objects in one paste, all independent and clean. ✓
+
+**Always generate `ExtendedAttributes` on `TextObj`s** (Text and Button objects) — this is the one exception to the round-trip-artifact omission list in §4.
+
+```xml
+<TextObj flags="0">
+  <ExtendedAttributes fontHeight="10" graphicFormat="0">
+    <NumFormat flags="0" charStyle="0" negativeStyle="0" currencySymbol="" thousandsSep="0" decimalPoint="0" negativeColor="#0" decimalDigits="0" trueString="" falseString=""/>
+    <DateFormat format="0" charStyle="0" monthStyle="0" dayStyle="0" separator="0">
+      <DateElement>0</DateElement>
+      <DateElement>0</DateElement>
+      <DateElement>0</DateElement>
+      <DateElement>0</DateElement>
+      <DateElementSep index="0"/>
+      <DateElementSep index="1"/>
+      <DateElementSep index="2"/>
+      <DateElementSep index="3"/>
+      <DateElementSep index="4"/>
+    </DateFormat>
+    <TimeFormat flags="0" charStyle="0" hourStyle="0" minsecStyle="0" separator="0" amString="" pmString="" ampmString=""/>
+    <CharacterStyle mask="32695">
+      <Font-family codeSet="Other" fontId="0" postScript="HelveticaNeue">Helvetica Neue</Font-family>
+      <Font-size>16</Font-size>
+      <Face>0</Face>
+      <Color>#282828</Color>
+    </CharacterStyle>
+  </ExtendedAttributes>
+  <Styles>
+    <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
+  </Styles>
+  <CharacterStyleVector>
+    <Style>
+      <Data>Label text</Data>
+      <CharacterStyle mask="32695">...</CharacterStyle>
+    </Style>
+  </CharacterStyleVector>
+  <ParagraphStyleVector>
+    <Style>
+      <Data>Label text</Data>
+      <ParagraphStyle mask="0"></ParagraphStyle>
+    </Style>
+  </ParagraphStyleVector>
+</TextObj>
+```
+
+The `ExtendedAttributes > CharacterStyle` values should mirror the object's own `CharacterStyleVector > Style > CharacterStyle` values. `NumFormat`/`DateFormat`/`TimeFormat` can stay at the placeholder defaults shown — they don't need to be meaningful for a Text object, only present.
+
+### §31.1 Scope: confirmed fixed, and what's still pending confirmation
+
+**Confirmed fixed:** standalone `Text` objects, n=2 and n=3, batched in one paste. ✓
+
+**Not yet retested with `ExtendedAttributes` added — treat with the old one-object-per-paste caution until confirmed:**
+- `Button` objects (static labels) — the mechanism is the same `TextObj`, likely fixed the same way, but not directly verified.
+- `ButtonBar` segments and `GroupButton` children — same reasoning, not directly verified.
+- Fields carrying `PlaceholderText` (§5.6) — this contaminates via the field's `Calculation` content, a different code path than `TextObj`'s `CharacterStyleVector`; whether adding `ExtendedAttributes` to the `FieldObj` (not the `TextObj`) fixes this is a separate open question.
+
+### §31.2 What was ruled out before the real cause was found
+
+For the record, since these were tested and matter if `ExtendedAttributes` ever turns out to be insufficient in some case: `CharacterStyle mask` value, font/size/colour/`Face`, and spatial distance between objects were all varied and none of them prevented the corruption on their own. ✓ Native-origin XML (hand-typed, or hand-typed-then-edited-with-a-tool) was also unaffected regardless of `ExtendedAttributes` — which in hindsight was the clue, since native exports always carry that block and generated XML didn't.
+
+### §31.3 Container-type findings (predate the fix — recheck if relying on these)
+
+From a probe run before `ExtendedAttributes` was identified as the cause, without it present: `ButtonBar` segments did not accumulate against each other but still left a residue that contaminated a subsequent `GroupButton`; `GroupButton` children accumulated normally; `TabControl` panel titles (`TitleCalc`-based, not `TextObj`) were unaffected. Whether these container types behave differently once `ExtendedAttributes` is added to their internal `TextObj`s has not been retested.
+
+### §31.4 Generation rule
+
+Include `ExtendedAttributes` on every generated `TextObj` (Text and Button objects), even when only one is being pasted — it costs nothing and removes the risk. For `ButtonBar` segments, `GroupButton` children, and `PlaceholderText` fields, apply the same fix and treat multi-object batches as unconfirmed until you've verified it yourself; fall back to one-per-paste for those specifically if you need certainty.
+
