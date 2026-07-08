@@ -22,7 +22,7 @@ When this skill is active, Claude will:
 
 Pasting two or more Text objects without an `ExtendedAttributes` block on each `TextObj` causes FileMaker to silently concatenate their text together at paste time. Always include a standard `ExtendedAttributes` block (matching the object's own `CharacterStyle`) on every generated Text and Button object — confirmed to eliminate the corruption entirely at n=2 and n=3 objects in one paste. Never omit it, even for a single object — it costs nothing and removes the risk.
 
-`ButtonBar` segments, `GroupButton` children, and fields with `PlaceholderText` share a related mechanism but haven't been directly retested with this fix — apply the same `ExtendedAttributes` pattern to them as a precaution, and fall back to one object per paste if you need certainty. Full detail in `references/filemaker_layout_xml_rules.md` §31.
+`Button` objects, `ButtonBar` segments, `GroupButton` children, and PopoverButton labels are confirmed clean in large batches with the block present. Two things remain dangerous: fields with `PlaceholderText` (keep one per paste), and dynamic calculated titles on non-front tab panels (they don't survive batch paste — use quoted literals). Full detail in `references/filemaker_layout_xml_rules.md` §31 and §11.
 
 ## Pre-flight: theme identification (mandatory)
 

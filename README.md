@@ -46,7 +46,7 @@ The result is a formal specification for a format that Claris has never document
 SKILL.md                                   Claude skill definition
 README.md                                  This file
 references/
-  filemaker_layout_xml_rules.md            Full specification (v2.1, ~1400 lines)
+  filemaker_layout_xml_rules.md            Full specification (v2.2, ~1600 lines)
 ```
 
 ---
@@ -152,6 +152,7 @@ If you're working on a FileMaker project and need expert help, get in touch.
 
 | Version | Notes |
 |---|---|
+| 2.2 | Web viewer `externalFlagSet` fully decoded (every setup-dialog option bit, including the JavaScript-bridge bit and its silent-failure mode). Script trigger execution contexts documented (which clients actually fire them — and which writes silently bypass them). Multi-object paste protection confirmed for Buttons, ButtonBar segments, GroupButton children and PopoverButtons; two new corruption paths found and documented (dynamic tab-panel titles, popover labels). Invalid calculations discovered to be silently comment-neutralised on paste rather than rejected. Object naming corrected (it's the `name` attribute), tab-panel title serialisation corrected, shape element order corrected, and a batch of FM Pro 26 round-trip artifacts catalogued. |
 | 2.1 | **We found a real FileMaker bug — and fixed it** (see "Multi-object Text/Button paste corruption and the fix" above). Plus: Portal behaviour completely re-verified end to end (several long-standing assumptions turned out wrong once actually tested), and a fresh batch of field/formatting rules confirmed. The most rigorously tested release yet. |
 | 2.0 | Theming and behavioural model. Added the LocalCSS/CustomStyles/FullCSS serialisation model and four cases, the complete Face character-attribute bitmask, the full script-trigger event table with object-type scoping, button icon embedded-SVG streams, button-bar LabelCalc, the FileMaker 2026 CanEntryCalc access-by-calculation element (generated elements confirmed to enforce), and theme independence proven across two themes. Element-order section refined to match round-trip output (see §21). |
 | 1.1 | Extended corpus: 45+ layouts, 10 applications. Added ScriptTriggers, ToolTip, LabelCalc sections. CSS selectors table. portalFlags extended. TabPanelObj corrected (not a round-trip artifact). |
