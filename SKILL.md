@@ -22,7 +22,11 @@ When this skill is active, Claude will:
 
 Pasting two or more Text objects without an `ExtendedAttributes` block on each `TextObj` causes FileMaker to silently concatenate their text together at paste time. Always include a standard `ExtendedAttributes` block (matching the object's own `CharacterStyle`) on every generated Text and Button object — confirmed to eliminate the corruption entirely at n=2 and n=3 objects in one paste. Never omit it, even for a single object — it costs nothing and removes the risk.
 
-`Button` objects, `ButtonBar` segments, `GroupButton` children, and PopoverButton labels are confirmed clean in large batches with the block present. Two things remain dangerous: fields with `PlaceholderText` (keep one per paste), and dynamic calculated titles on non-front tab panels (they don't survive batch paste — use quoted literals). Full detail in `references/filemaker_layout_xml_rules.md` §31 and §11.
+`Button` objects, `ButtonBar` segments, `GroupButton` children, PopoverButton labels, and fields with `PlaceholderText` are confirmed clean in batches with the block present — placeholder fields need nothing extra and batch freely. One thing remains dangerous: dynamic calculated titles on non-front tab panels (they don't survive batch paste — use quoted literals). Full detail in `references/filemaker_layout_xml_rules.md` §31 and §11.
+
+## Critical: ButtonBar segment labels go in LabelCalc, not Data
+
+On FM 26, segment label text placed in `CharacterStyleVector > Data` survives round-trip byte-perfect and renders as a blank segment — the XML passes every structural audit and fails only on screen. Generate segment labels in a `<LabelCalc>` element as the last child of each segment Button (after `ButtonObj`), with `Data` left empty, segment `flags="8"`, and an empty `ButtonObj buttonFlags="2" iconSize="16"`. PopoverButtons are the exact inverse: label goes in `Data` like a Text object, and `LabelCalc` must not be generated on them. Full detail in §9, §9.1, and §14.
 
 ## Pre-flight: theme identification (mandatory)
 
