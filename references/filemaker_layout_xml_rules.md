@@ -4,6 +4,8 @@ Paste-ready FileMaker layout object XML (`fmxmlsnippet type="LayoutObjectList"`)
 
 **✓** = round-trip verified  **◎** = observed across multiple layouts  **○** = single-observation hypothesis
 
+**Methodology note:** ✓ certifies round-trip *survival*. Survival does not guarantee *rendering* — FM 26 will faithfully round-trip elements its renderer no longer reads (see §9.1). Where a claim concerns on-screen behaviour, visual confirmation is stated explicitly.
+
 ---
 
 ## §0 Pre-flight: theme identification
@@ -81,7 +83,7 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 |---|---|---|
 | 0 | 1 | Has `ConditionalFormatting` ✓ |
 | 2 | 4 | Object has a HideCondition ✓ |
-| 3 | 8 | Portal field row option ◎ |
+| 3 | 8 | Portal field row option ◎. Also observed natively as the sole flag on labelled button-family objects — plain ButtonBar segments and PopoverButtons both export `flags="8"` on FM 26 (context-dependent meaning; generated `flags="0"` binds fine on both) ◎ |
 | 8 | 256 | Object has icon (ButtonObj icon streams present) ◎ |
 | 9 | 512 | Layout part marker ○ |
 | 12 | 4096 | Line/Rect: round-trips intact but no visible effect found anywhere in the FM Pro 26 Inspector — treat as an inert/legacy marker; do not generate expecting behaviour ✓ |
@@ -155,10 +157,10 @@ Minimal form — sufficient for generation: ✓
 
 These are **round-trip artifacts** — FM adds them on export but does not require them on paste. Omit when generating:
 - `FullCSS` — FM computes from `ThemeName` + `LocalCSS` ✓
-- `ExtendedAttributes` on `FieldObj` — FM generates from field type and formatting settings ✓
+- `ExtendedAttributes` on `FieldObj` — FM generates from field type and formatting settings. Also inert for §31 purposes (including on `PlaceholderText` fields — the protection is sink-side, on `TextObj`s), so omission is safe in every case ✓
 - `DDRInfo` — FM populates from the file's own field registry ✓
 - `ParagraphStyleVector` — FM adds on export; not required for paste ✓
-- `SlidePanel > Styles` — FM adds on export; not required for paste ✓
+- `SlidePanel > Styles` — not required for paste ✓; FM 26 exports SlidePanels with no `Styles` element at all, so the earlier "FM adds on export" observation no longer reproduces
 - Empty `<HideCondition>` elements (ButtonBar segments `findMode="True"`, some portal fields `findMode="False"`) — FM adds on export; omit ✓
 
 **Exception: `ExtendedAttributes` on a `TextObj` is required, not optional, whenever more than one `TextObj`-bearing object is being pasted in the same operation.** Omitting it is the root cause of the multi-object text corruption in §31 — include it on every generated Text/Button object. This is the one item in this list that is not safe to omit.
@@ -225,7 +227,7 @@ self:normal .self
 Common combinations:
 - `0` — default
 - `32` — tab only
-- `36` — not enterable + tab ◎
+- `36` — not enterable + tab ✓ (survives verbatim standalone and in portals; behaviour confirmed by same-paste portal comparison against a `32` field — §10.5)
 - `32804` — not enterable + tab + Quick Find off ✓
 - `32800` — tab + Quick Find off ✓
 - `525344` — tab + calendar button (bits 5,10,19) ✓
@@ -297,7 +299,13 @@ First confirmed via round-trip. Child of `FieldObj`, positioned after `Styles` a
 
 Generated with no `findMode` attribute; FM added `findMode="True"` itself on round-trip. Sets `FieldObj` flags bit 17 (131072). Confirmed working end to end: the ghost text displays in the empty field exactly as specified. ✓
 
-**Confirmed vulnerable to the §31 accumulation bug.** A field with `PlaceholderText` followed by a single `Text` object — nothing else on the layout — produced a Text object contaminated with the field's literal `Calculation` source (quotes included) prefixed onto its own content. `PlaceholderText`'s calculation feeds the same running accumulator as `TextObj`. Treat a `PlaceholderText`-bearing field exactly like a `Text`/`Button` object under §31: don't combine it in one paste with any other `TextObj`-bearing object (including another `PlaceholderText` field). ✓
+**§31 accumulation: source confirmed, sink-side fix confirmed.** A field with `PlaceholderText` followed by a `Text` object lacking `ExtendedAttributes` produced a Text object contaminated with the field's literal `Calculation` source (quotes included) prefixed onto its own content — `PlaceholderText`'s calculation feeds the same running accumulator as `TextObj`. ✓
+
+The standing §31 fix covers it entirely. With `ExtendedAttributes` on every `TextObj` in the paste, multiple `PlaceholderText` fields combine freely with each other and with Text/Button objects: verified at two placeholder fields + Text (full round-trip, both Calculations verbatim, canary clean) and at four placeholder fields interleaved with two Texts and a Button (all four ghosts rendering, both canaries and button label clean). ✓
+
+`ExtendedAttributes` on the `FieldObj` itself is **inert** for this purpose — a controlled run with bare FieldObjs and an EA-carrying downstream Text was equally clean, placeholders intact. The protection is entirely sink-side, and unlike a non-front `TabPanel`'s dynamic `TitleCalc` (§11), the placeholder source is not consumed when its discharge path is blocked. ✓
+
+**Review flag (unchanged FM behaviour):** a `PlaceholderText`-bearing field alongside any EA-less `TextObj` in the same snippet is still the original corruption. The generation rule prevents it; flag it when reviewing third-party XML.
 
 ### §5.7 Portal field bounds
 
@@ -461,13 +469,21 @@ Empty `SortList` element required even when no sort configured. ✓
 </Object>
 ```
 
-Button label text lives in `TextObj > CharacterStyleVector > Style > Data`. `TextObj` is required on buttons. `LabelCalc` isn't functionally used for a static label — FM adds an empty one as a round-trip artifact (§19.1). `ExtendedAttributes` is included above for the same reason as §6 — its absence caused multi-object Text paste corruption (§31); not yet directly retested for Button objects specifically, but apply it as a precaution since the mechanism is identical (`TextObj`).
+Button label text lives in `TextObj > CharacterStyleVector > Style > Data`. `TextObj` is required on buttons. `LabelCalc` isn't functionally used for a static label — FM adds an empty one as a round-trip artifact (§19.1). **Render verified on FM 26:** a single generated Button with its label in `Data` pastes, renders the label correctly, and round-trips verbatim (FM adds the matching `ParagraphStyleVector` and strips a generated `Step id="0" name="None"` to an empty `ButtonObj`). The Data-label render failure is confined to ButtonBar segments (§9.1); standalone Buttons and PopoverButtons (§14) both genuinely label via `Data`. ✓ `ExtendedAttributes` is included above for the same reason as §6 — its absence caused multi-object Text paste corruption (§31); not yet directly retested for Button objects specifically, but apply it as a precaution since the mechanism is identical (`TextObj`).
 
 ### §8.1 ButtonObj attributes
 
 | Attribute | Values |
 |---|---|
-| `buttonFlags` | Bitmask. Bit 0 (1) = calculated label — set by FM when a `LabelCalc` applies (a bar segment generated with a LabelCalc comes back `buttonFlags="1"`) ✓. Bit 1 (2) = toggle — round-trips intact ✓. `3` = toggle + calculated label. Generate `0`; FM sets bit 0 itself. |
+| `buttonFlags` | Bitmask. Bit 0 (1) = calculated label — set by FM when a non-literal `LabelCalc` expression applies ✓; NOT set for quoted-literal LabelCalcs, which return `buttonFlags="2"` on both native and generated FM 26 segments ✓. Bit 1 (2) = round-trips intact ✓ (present on all observed FM 26 segments; earlier noted as toggle). `3` = both bits. Generate `0` on standalone buttons; on segments the native shape is `buttonFlags="2" iconSize="16"` (§9). |
+
+**Segment icons (FM 26, verified by per-segment capture).** An icon on a segment is carried entirely inside `ButtonObj` — segment `Object flags` are untouched. Components:
+
+- `displayType` on the segment `ButtonObj` selects the label/icon arrangement, fully derived by capturing one bar per Button Bar Setup arrangement option in dialog order: `0` = label only, `1` = icon only, `2` = icon above label, `3` = label above icon, `4` = icon left of label, `5` = icon right of label ✓. The icon streams are arrangement-independent (identical FNAM/GLPH/SVG across all values), and `iconSize` persists dormant at `displayType="0"` ✓
+- Three `Stream` children follow inside `ButtonObj`: `FNAM` (hex-encoded icon/font name record), `GLPH` (single byte `01`), and `SVG ` (hex-encoded SVG source with an `fm_fill` class group) — one triple per segment, each segment can carry a different icon ✓
+- `iconSize` sets the icon point size ✓
+
+See §19 for the SVG stream format detail.
 | `iconSize` | `0`–`19` |
 | `displayType` | `0`–`4` (text/icon display mode) |
 
@@ -503,79 +519,105 @@ Sets `Object flags` bit 2 (value 4). ✓
 
 ## §9 ButtonBar
 
+**FM 26 label mechanism: `LabelCalc` per segment, NOT `CharacterStyleVector > Data`.** Segment label text placed in `Data` survives round-trip byte-perfect but renders blank — see §9.1. The structure below is the verified generation pattern, matching native FM 26 export shape (native capture + generated paste rendering + full round-trip, all confirmed):
+
 ```xml
 <Object type="ButtonBar" key="1" LabelKey="0" flags="0" rotation="0">
   <Bounds top="0" left="0" bottom="35" right="300"/>
-  <ButtonBarObj flags="0" segmentKey="0">
-    <Object type="Button" key="2" LabelKey="0" flags="260" rotation="0">
-      <Bounds top="1" left="1" bottom="34" right="150"/>
-      <TextObj flags="2">
-        <Styles>
-          <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
-        </Styles>
-        <CharacterStyleVector>
-          <Style>
-            <Data>Home</Data>
-            <CharacterStyle mask="32695">
-              <Font-family codeSet="Other" fontId="0" postScript="HelveticaNeue">Helvetica Neue</Font-family>
-              <Font-size>16</Font-size>
-              <Face>0</Face>
-              <Color>#0091CE</Color>
-            </CharacterStyle>
-          </Style>
-        </CharacterStyleVector>
-      </TextObj>
-      <ButtonObj buttonFlags="0" iconSize="0" displayType="0">
-        <Step enable="True" id="0" name="None"/>
-      </ButtonObj>
-    </Object>
-    <Object type="Button" key="3" LabelKey="0" flags="260" rotation="0">
-      <Bounds top="1" left="150" bottom="34" right="299"/>
-      <TextObj flags="2">
-        <Styles>
-          <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
-        </Styles>
-        <CharacterStyleVector>
-          <Style>
-            <Data>Detail</Data>
-            <CharacterStyle mask="32695">
-              <Font-family codeSet="Other" fontId="0" postScript="HelveticaNeue">Helvetica Neue</Font-family>
-              <Font-size>16</Font-size>
-              <Face>0</Face>
-              <Color>#0091CE</Color>
-            </CharacterStyle>
-          </Style>
-        </CharacterStyleVector>
-      </TextObj>
-      <ButtonObj buttonFlags="0" iconSize="0" displayType="0">
-        <Step enable="True" id="0" name="None"/>
-      </ButtonObj>
-    </Object>
-  </ButtonBarObj>
   <Styles>
     <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
   </Styles>
+  <ButtonBarObj flags="0" segmentKey="0">
+    <Object type="Button" key="2" LabelKey="0" flags="8" rotation="0">
+      <Bounds top="1" left="1" bottom="34" right="150"/>
+      <TextObj flags="2">
+        <ExtendedAttributes fontHeight="10" graphicFormat="0">
+          <!-- standard block, as §31 — REQUIRED -->
+        </ExtendedAttributes>
+        <Styles>
+          <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
+        </Styles>
+        <CharacterStyleVector>
+          <Style>
+            <Data/>
+            <CharacterStyle mask="32695">
+              <Font-family codeSet="Other" fontId="0" postScript="HelveticaNeue">Helvetica Neue</Font-family>
+              <Font-size>16</Font-size>
+              <Face>0</Face>
+              <Color>#0091CE</Color>
+            </CharacterStyle>
+          </Style>
+        </CharacterStyleVector>
+      </TextObj>
+      <ButtonObj buttonFlags="2" iconSize="16" displayType="0">
+</ButtonObj>
+      <LabelCalc>
+        <Calculation><![CDATA["Home"]]></Calculation>
+      </LabelCalc>
+    </Object>
+    <Object type="Button" key="3" LabelKey="0" flags="8" rotation="0">
+      <Bounds top="1" left="150" bottom="34" right="299"/>
+      <TextObj flags="2">
+        <ExtendedAttributes fontHeight="10" graphicFormat="0">
+          <!-- standard block -->
+        </ExtendedAttributes>
+        <Styles>
+          <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
+        </Styles>
+        <CharacterStyleVector>
+          <Style>
+            <Data/>
+            <CharacterStyle mask="32695">
+              <Font-family codeSet="Other" fontId="0" postScript="HelveticaNeue">Helvetica Neue</Font-family>
+              <Font-size>16</Font-size>
+              <Face>0</Face>
+              <Color>#0091CE</Color>
+            </CharacterStyle>
+          </Style>
+        </CharacterStyleVector>
+      </TextObj>
+      <ButtonObj buttonFlags="2" iconSize="16" displayType="0">
+</ButtonObj>
+      <LabelCalc>
+        <Calculation><![CDATA["Detail"]]></Calculation>
+      </LabelCalc>
+    </Object>
+  </ButtonBarObj>
 </Object>
 ```
 
+- **Segment label in `<LabelCalc>` as the last child of the segment `Object`, after `ButtonObj`** — this is what the FM 26 renderer reads. Generated LabelCalc survives round-trip verbatim and renders. ✓
+- `CharacterStyleVector > Data` on segments: leave empty (`<Data/>`), matching native shape. Populated Data survives but does not render — see §9.1. ✓
+- Segment Object `flags="8"` (native FM 26 plain segment; see flag table note below) ✓
+- `ButtonObj buttonFlags="2" iconSize="16" displayType="0"`, empty — no `Step` child on plain segments; a generated `Step id="0" name="None"` is stripped on paste ✓
+- ButtonBar-level `Styles` before `ButtonBarObj` (native export order; FM also accepts it after) ✓
 - `ButtonBarObj` requires `flags="0" segmentKey="0"` attributes ✓
-- Button label text in `TextObj > CharacterStyleVector > Style > Data` ✓
 - `TextObj flags="2"` inside ButtonBar segments (not `"0"`) ✓
 - Button segment bounds start at `(1,1)` not `(0,0)` — FM adds 1pt inset ✓
 - Button segments are adjacent: second button's `left` = first button's `right` ✓
-- `LabelCalc` is ignored — do not use ✓
+- Round-trip artifacts FM may add inside segments (omit when generating): empty `<HideCondition findMode="True">`, and inside a `Step`, `<DisableStepCollapsed state="False"/>` and `<CurrentScript value="Pause"/>` ✓
+
+### §9.1 Survives-but-does-not-render: the Data label trap
+
+Segment label text generated in `CharacterStyleVector > Style > Data` (and mirrored in `ParagraphStyleVector`) pastes without error, survives copy-back **byte-perfect including FM adding matching ParagraphStyleVector entries**, and renders as a blank segment in both Layout and Browse mode. The XML passes any structural audit; only a visual check catches it. Confirmed on FM 26 at three segments generated (blank) against native capture (labels in `LabelCalc`, `Data` empty) and generated `LabelCalc` (renders). ✓
+
+Earlier revisions of this spec stated the reverse ("label text in `Data` ✓; `LabelCalc` is ignored ✓"). Those marks were earned on round-trip **survival**, which remains true, but the render path was never separately pinned. Whether the mechanism changed in an FM release or was always LabelCalc-driven is not established. Current findings are pinned to FileMaker Pro 26.0.1.51 (macOS); an FM 25 comparison would settle it.
 
 **Button Object flags in ButtonBar:**
 
+**Verified current (FM 26):** plain segment `flags="8"` — native capture and generated round-trip, renders correctly. ✓ Use `8` when generating.
+
+The table below predates the §9.1 finding and came from the same capture generation as the dead Data mechanism. Treat as legacy observations pending re-derivation from current native captures (icon, active, and named segment variants needed):
+
 | Value | Bits | Use |
 |---|---|---|
-| `260` | 2,8 | Standard segment |
-| `261` | 0,2,8 | Active or icon-only segment |
-| `256` | 8 | Single-segment bar |
-| `65544` | 3,16 | Named segment |
-| `65545` | 0,3,16 | Named active segment |
+| `8` | 3 | The segment flag value on FM 26 — the only one. Verified across a plain segment, a segment in a bar with a UI-typed object name, a segment designated active via Specify Active Segment, and a single-segment bar: all export `flags="8"` unchanged ✓ |
 
-Bit 0 = currently active layout's button — FM sets this on save. Use `260` for standard, `261` for icon-only when generating. ◎
+**What the legacy flag values actually were.** FM 26 does not encode segment state in `Object flags` at all:
+
+- **Active segment** is a bar attribute: Specify Active Segment (fixed) serialises as `ButtonBarObj segmentKey="<active segment's key>"`; `segmentKey="0"` means none set. Verified by UI round trip — designating segment four returned `segmentKey` pointing at its key while the segment stayed `flags="8"`. ✓ Generate `segmentKey="0"` unless a fixed active segment is wanted.
+- **Object names** live purely in the `name` attribute and set no flag bit — verified both for paste-generated names (earlier) and for a UI-typed name on a bar, which exported `name` with `flags="0"`. ✓ The legacy `65544`/`65545` values (bit 16) reflect a mechanism FM 26 does not use.
+- The legacy values `260`/`261`/`256`/`65544`/`65545` from earlier captures should not be generated; their provenance is unresolved and now moot: per-segment icon captures confirmed that icons do NOT touch segment `Object flags` either — four segments with distinct icons all exported `flags="8"`, in both icon-only and icon-with-text arrangements. No FM 26 segment state is encoded in `Object flags`. ✓ The legacy values are historical record only. ○
 
 ---
 
@@ -722,14 +764,14 @@ Omit entirely when no filter. Works when paired with `portalFlags` bit 7 (see §
 ```
 Content alone (bit 7 absent) survives the round-trip but "Filter portal records" stays unticked — same pattern as `SortList`. Generating this element together with `portalFlags` bit 7 set produces a working, ticked filter — confirmed via `portalFlags="397"`. ✓
 
-Element order in `PortalObj`: `TableAliasKey` → `SortList` → `FilterCalc` → `Styles` → field `Object` elements. ◎
+Element order in `PortalObj`: `TableAliasKey` → `SortList` → `FilterCalc` → `Styles` → field `Object` elements. Generated in this order against a real relationship (flags 397, live sort and filter content), returned in this order verbatim. ✓
 
 ### §10.5 Portal field FieldObj flags
 
 | Value | Meaning |
 |---|---|
-| `32` | Enterable ◎ |
-| `36` | Not enterable ◎ |
+| `32` | Enterable ✓ — generated portal field accepts entry in Browse mode; flags value round-trips verbatim |
+| `36` | Not enterable ✓ — generated portal field is view-only in Browse mode; flags value round-trips verbatim. Same-paste comparison against a `32` sibling field |
 
 ---
 
@@ -765,22 +807,33 @@ Element order in `TabPanel`: `Bounds` → `Styles` → `TitleCalc` → `TabPanel
 `TabControlObj` requires its own `Styles` block before the panel objects. ✓
 `TabPanelObj` carries attributes `tabLeftEdge`, `tabWidth`, `tabPanelFlagSet`. If omitted from a generated panel, FileMaker synthesises it on paste and the tab control renders normally, so it is not mandatory to emit; include it when you need to control those attributes. ✓
 
-**TabPanel content is NOT nested inside TabPanel elements.** Content objects are placed as layout siblings at absolute coordinates overlapping the TabControl bounds. ◎
+**TabPanel content nests INSIDE `TabPanelObj`.** Verified in both directions on FM 26: content attached in the UI serialises as child `Object` elements inside the panel's `TabPanelObj` (with bounds relative to the TabControl origin), and a generated `Object` nested inside `TabPanelObj` pastes as attached panel content — it highlights with the panel and hides when another panel is front. Full round-trip: the generated nested child returns still nested, with its control-relative `Bounds` byte-identical. ✓
+
+```xml
+<TabPanelObj tabLeftEdge="100" tabWidth="100" tabPanelFlagSet="0">
+  <Object type="Text" key="5" ...>
+    <Bounds top="100" left="40" bottom="125" right="240"/>  <!-- relative to TabControl origin -->
+    ...
+  </Object>
+</TabPanelObj>
+```
+
+**Geometric overlap attaches nothing.** A sibling object generated at absolute coordinates inside the panel area pastes as a free-floating layout object in front of the control, not as panel content. ✓ Earlier revisions of this spec stated the sibling model as the mechanism; that was wrong — attachment is structural, not spatial.
 
 ### §11.1 TabControlObj attributes
 
 | Attribute | Notes |
 |---|---|
 | `tabHeight` | Derived — FM recomputes from font and padding on paste (a generated `20` comes back `46`); emit any value ✓ |
-| `visPanelKey` | Key of currently visible panel ◎ |
-| `defaultVisPanelKey` | Key of panel shown by default ◎ |
-| `visPanelIndex` | 0-based index of visible panel ◎ |
-| `defaultVisPanelIndex` | 0-based index of default panel ◎ |
-| `tabWidthModifier` | Tab label width adjustment ◎ |
+| `visPanelKey` | Key of currently visible panel. Generated value binds — a control generated pointing at its third panel opens with that panel front; FM rewrites the key to its reassigned panel key on round-trip ✓ |
+| `defaultVisPanelKey` | Key of panel shown by default — binds from generated XML, verified alongside `visPanelKey` ✓ |
+| `visPanelIndex` | 0-based index of visible panel — survives verbatim ✓ |
+| `defaultVisPanelIndex` | 0-based index of default panel — survives verbatim ✓ |
+| `tabWidthModifier` | Survives verbatim and renders. Semantics: acts as a **minimum tab width** — with modifier 150 all tabs return `tabWidth=150`; with modifier 70 tabs return 79/81/96, i.e. label text + padding wins when larger than the modifier ◎ |
 | `tabJustification` | Does not survive round-trip. ✓ — retested with 2-panel controls at values 0/1/2: the attribute is absent entirely from every returned `TabControlObj`, and all three rendered identically (tabs left-aligned, occupying only their own width). Confirmed non-functional/non-persistent via generation; do not rely on it. |
-| `tabFlagSet` | Observed values: `264`, `312`, `328`. Both `264` and `312` round-trip intact with no behavioural difference identified. Use `312` ◎ |
+| `tabFlagSet` | `264` and `312` both round-trip verbatim (no normalisation) and render identically — verified side by side in one paste. `328` observed in the wild. No behavioural difference identified between `264`/`312`; use `312`. ✓ |
 
-**Panel title serialisation.** On export FM emits `TitleCalc` only for the front/checked panel; other panels' static titles serialise as `TextObj > CharacterStyleVector > Style > Data` inside the `TabPanel`. A generated static `TitleCalc` on a non-front panel applies correctly on paste and converts to the Data form on the next copy. ✓
+**Panel title serialisation.** A generated static `TitleCalc` on any panel (front or not) applies correctly on paste and converts to the `TextObj > CharacterStyleVector > Style > Data` form inside the `TabPanel` on the next copy. ✓ On generated-origin controls, FM 26 exports ALL panel titles as Data — front panel included, no `TitleCalc` anywhere, and the panel `TextObj`s come back bare (no `ExtendedAttributes`, `mask="0"`). The earlier claim that FM emits `TitleCalc` for the front/checked panel was not reproduced in any FM 26 capture this cycle; whether a hand-built (never-pasted) control differs is unverified — treat the front-panel `TitleCalc` export claim as withdrawn pending a native-origin capture. ◎
 
 **Dynamic titles: front panel only.** A non-literal `TitleCalc` on a NON-front panel does not survive generated paste — with `ExtendedAttributes` present throughout the batch it is silently dropped (blank tab); without, its calc source migrates into the next EA-less `TextObj` in the paste, destroying that object's label (§31). Generate dynamic titles only as quoted literals on non-front panels, or accept the loss. ✓
 
@@ -798,15 +851,23 @@ TitleCalc accepts a bare FM expression or a quoted string literal:
 
 ```xml
 <Object type="SlideControl" key="1" LabelKey="0" flags="0" rotation="0">
-  <Bounds top="50" left="4" bottom="400" right="762"/>
-  <SlideControlObj visPanelKey="1047" visPanelIndex="4"
-                   dotSize="9" slideFlagSet="1">
+  <Bounds top="20" left="20" bottom="240" right="400"/>
+  <SlideControlObj visPanelKey="3" visPanelIndex="1" dotSize="9" slideFlagSet="0">
+    <Styles>
+      <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
+    </Styles>
     <Object type="SlidePanel" key="2" LabelKey="0" flags="0" rotation="0">
-      <Bounds top="0" left="0" bottom="350" right="758"/>
+      <Bounds top="0" left="0" bottom="220" right="380"/>
       <SlidePanelObj slidePanelFlagSet="0"/>
-      <Styles>
-        <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
-      </Styles>
+    </Object>
+    <Object type="SlidePanel" key="3" LabelKey="0" flags="0" rotation="0">
+      <Bounds top="0" left="0" bottom="220" right="380"/>
+      <SlidePanelObj slidePanelFlagSet="0">
+        <Object type="Text" key="5" ...>
+          <Bounds top="60" left="50" bottom="85" right="250"/>  <!-- relative to SlideControl origin -->
+          ...
+        </Object>
+      </SlidePanelObj>
     </Object>
   </SlideControlObj>
   <Styles>
@@ -815,7 +876,16 @@ TitleCalc accepts a bare FM expression or a quoted string literal:
 </Object>
 ```
 
-SlidePanel `Bounds` are relative to SlideControl. Content objects are layout siblings, not nested — same pattern as TabControl. ◎  
+SlidePanel `Bounds` are relative to SlideControl. ✓
+
+**SlidePanel content nests INSIDE `SlidePanelObj`** — same mechanism as TabControl (§11), verified in both directions on FM 26: UI-attached content serialises as child `Object` elements inside `SlidePanelObj` with control-relative bounds, and a generated nested `Object` pastes attached and round-trips still nested with `Bounds` byte-identical. ✓ **Geometric overlap attaches nothing** — a sibling object generated at absolute coordinates over the panel area pastes free-floating, exactly as at §11. ✓ Earlier revisions stated the sibling model; that was wrong for both container types.
+
+**`slideFlagSet` bit 0 (value 1) = navigation dots HIDDEN.** A control generated with `slideFlagSet="1"` pastes with no dots; a control with dots visible exports `slideFlagSet="0"`. Generate `0` for the standard dotted control. ✓ (Earlier revisions' example used `1`, silently suppressing the dots.)
+
+`visPanelKey`/`visPanelIndex` bind from generated XML — a control generated pointing at its second panel returns with that panel's reassigned key and `visPanelIndex` intact. ✓
+
+Native `SlideControlObj` carries its own `Styles` block before the panels (as `TabControlObj` does); a generated control without it still pastes, so it is not mandatory — include a minimal `ThemeName` block to match native shape. ◎ FM 26 exports SlidePanels with NO `Styles` element at all; do not generate one on panels. ✓
+
 No `TitleCalc` — navigation is via dot indicators. A `TitleCalc` generated on a `SlidePanel` is dropped on paste. ✓
 
 ---
@@ -840,7 +910,7 @@ No `TitleCalc` — navigation is via dot indicators. A `TitleCalc` generated on 
 </Object>
 ```
 
-`numOfObjs` = count of grouped child objects. Child objects follow `Styles` inside `GroupButtonObj`. ◎
+`numOfObjs` = count of grouped child objects. Child objects follow `Styles` inside `GroupButtonObj`. Verified at `numOfObjs="3"` with two `Line` children and one `Text` child: count returned verbatim, all three children grouped, child bounds byte-identical. ✓ (Whether FM validates or corrects a deliberately wrong count is untested — keep the count accurate.)
 
 **Position caution.** Generated GroupButton outer `Bounds` are not preserved — FM relocates the outer object on paste (observed twice, including with Paste in Place) while child objects keep their generated absolute coordinates verbatim. Structure (`numOfObjs`, Line children, Text child) survives; placement does not. When position matters, paste the children and group them in the UI. `GroupButtonObj > Styles` returns emptied on round-trip. ✓
 
@@ -885,7 +955,7 @@ GroupButtons can contain `Line` children to draw vector icons:
     </Styles>
     <CharacterStyleVector>
       <Style>
-        <Data/>
+        <Data>Open</Data>
         <CharacterStyle mask="32695">...</CharacterStyle>
       </Style>
     </CharacterStyleVector>
@@ -893,21 +963,18 @@ GroupButtons can contain `Line` children to draw vector icons:
   <PopoverButtonObj>
     <Object type="Popover" key="2" LabelKey="0" flags="0" rotation="0">
       <Bounds top="50" left="10" bottom="200" right="300"/>
-      <PopoverObj/>
-      <TitleCalc>
-        <Calculation><![CDATA["My Popover"]]></Calculation>
-      </TitleCalc>
       <Styles>
         <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
       </Styles>
+      <TitleCalc>
+        <Calculation><![CDATA["My Popover"]]></Calculation>
+      </TitleCalc>
+      <PopoverObj/>
     </Object>
   </PopoverButtonObj>
   <HideCondition findMode="False">
     <Calculation><![CDATA[IsEmpty($$var)]]></Calculation>
   </HideCondition>
-  <LabelCalc>
-    <Calculation><![CDATA["Open"]]></Calculation>
-  </LabelCalc>
   <Styles>
     <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
   </Styles>
@@ -918,7 +985,9 @@ Popover `Bounds` are absolute layout coordinates, but FM **recomputes them relat
 
 **The PopoverButton `TextObj` must carry `ExtendedAttributes`** — a bare `<TextObj flags="0"/>` is the §31 leak absorber: in batch testing it received a migrated TitleCalc's raw source as its label. ✓
 
-**`LabelCalc` on a PopoverButton is unreliable in batch pastes** — dropped in both test batches (with and without EA elsewhere), leaving an empty button label. Single-object paste unverified. ◎
+**PopoverButton label mechanism: `CharacterStyleVector > Data`, NOT `LabelCalc` — the exact inverse of ButtonBar segments (§9).** Fully verified: native FM 26 capture shows label text in `Data` in both vectors with no `LabelCalc` element anywhere; a generated single-object paste with the label in `Data` renders correctly; and the round-trip returns the `Data` verbatim in both vectors with `TitleCalc` intact. ✓ A generated `LabelCalc` is **dropped by the paste handler entirely** — confirmed empty label in both batch pastes and a single-object paste, and a later native export of that pasted button showed no `LabelCalc` element at all — because it was never the popover mechanism; earlier revisions of this spec had both halves inverted, the same error class as §9.1. Do not generate `LabelCalc` on PopoverButtons; put the label in `Data`, exactly as a Text object.
+
+Native shape notes: PopoverButton Object `flags="8"` natively (same value as native ButtonBar segments — bit 3 appears on labelled button-family objects); generated `flags="0"` binds and round-trips as `0` ✓. `PopoverObj` carries `flags` / `position` / `key` attributes on export (artifacts; a bare `<PopoverObj/>` pastes ✓).
 
 Element order in `Popover`: `Bounds` → `Styles` → `TitleCalc` → `PopoverObj`. ✓
 
@@ -945,7 +1014,7 @@ Element order in `Popover`: `Bounds` → `Styles` → `TitleCalc` → `PopoverOb
 ```
 
 - `name` attribute on Object element when targeted by `Perform JavaScript in Web Viewer` ✓
-- URL or full HTML string in `Calculation index="0"` ◎
+- URL or full HTML string in `Calculation index="0"` — both verified end to end: a quoted URL loads the page, a quoted `data:text/html,...` string renders the HTML, and both calculations round-trip verbatim ✓
 - Chart (`typeID="CHRT"`) not generatable
 
 ### §15.1 Web viewer option bits (`externalFlagSet`)
@@ -1099,7 +1168,7 @@ The event vocabulary is object-type dependent. A field carries the enter/exit/mo
 
 `triggerFlags="1"` on all observed instances — meaning unknown, include as-is. ✓
 `<Script id name>` reference binds by internal id. It reconnects only if that script id exists in the destination file — pasting into a file without the script leaves the trigger present but pointing at nothing. This is reference rebinding, not a survival failure. ✓
-`<TriggerText>` carried the script name; in the captures, where the script was named `beee`, `TriggerText` came back as `"beee"` (quote-wrapped) while the `<Script name>` attribute was unquoted. Reproduce `TriggerText` as observed; the reason for the wrapping was not established. ◎
+`<TriggerText>` is **derived output, not preserved input**: FM regenerates it on export from the script reference, quote-wrapping the current script name. Verified by generating one trigger with `TriggerText` quoted and one bare in the same paste — with the referenced script id unresolved, both returned identically as `"<unknown>"` (quote-wrapped), i.e. the generated content is discarded and rewritten. The earlier `beee` → `"beee"` capture fits the same rule. When generating, the `TriggerText` content is immaterial; the `<Script id name>` reference is what binds. ✓
 Multiple `<Trigger>` elements stack inside one `<ScriptTriggers>` block, in event-id order. ✓
 `OnPanelSwitch` also binds when generated on a **SlideControl** (survives round-trip; dangles to `<Script id="0" name="&lt;unknown&gt;"/>` when the id is absent). ✓
 
@@ -1117,7 +1186,7 @@ Consequences for generated layouts:
 
 ### §19.1 Standalone button labels are static text
 
-A standalone `Button` object's label is literal text carried as `<Data>` inside the `TextObj`'s `CharacterStyleVector` AND `ParagraphStyleVector`, with a matching `CharacterStyle`. A standalone button does not functionally use `LabelCalc` for its label — but FM adds an empty `<LabelCalc>\n</LabelCalc>` sibling on export regardless, the same way it adds `FullCSS`/`DDRInfo` elsewhere. This is a round-trip artifact, not something the button uses; omit it when generating. ✓
+A standalone `Button` object's label is literal text carried as `<Data>` inside the `TextObj`'s `CharacterStyleVector` AND `ParagraphStyleVector`, with a matching `CharacterStyle` — render and round-trip verified on FM 26 (§8). A standalone button does not functionally use `LabelCalc` for its label. Earlier captures showed FM adding an empty `<LabelCalc>` sibling on export as a round-trip artifact; FM 26 copy-backs this cycle did NOT reproduce that (no LabelCalc element on standalone Button or segment exports of Data-labelled buttons) — either way, omit it when generating. ✓
 
 ```xml
 <TextObj flags="2">
@@ -1139,7 +1208,7 @@ A standalone `Button` object's label is literal text carried as `<Data>` inside 
 
 ### §19.2 LabelCalc is a button-bar-segment feature
 
-`LabelCalc` drives a dynamic label on a **button-bar segment**, not on a standalone button. It is a child of the segment `Object`, positioned **after `ButtonObj`**. When present, the segment's `TextObj` `<Data>` is empty. ✓
+`LabelCalc` is the label mechanism for **button-bar segments** — dynamic AND static — not for standalone buttons or PopoverButtons (§14). It is a child of the segment `Object`, positioned **after `ButtonObj`**. When present, the segment's `TextObj` `<Data>` is empty. On FM 26, natively typed static segment labels also serialise as quoted literals in `LabelCalc` (not in `Data`), and generated static `LabelCalc` labels render correctly — see §9/§9.1 for the full mechanism and the Data-label trap. ✓
 
 ```xml
 <Object type="Button" key="231" ...>   <!-- a button bar segment -->
@@ -1154,7 +1223,7 @@ A standalone `Button` object's label is literal text carried as `<Data>` inside 
 
 Supports full FM expressions including conditional logic. Within a bar, a segment either carries a `LabelCalc` or an empty `<Data/>`. ✓
 
-A generated segment `LabelCalc` binds on paste; FM sets the segment's `ButtonObj buttonFlags` bit 0 (value 1) as the calculated-label marker, and Layout mode displays "Calculation" as the segment label. ✓
+A generated segment `LabelCalc` binds on paste. For a **non-literal expression**, FM sets the segment's `ButtonObj buttonFlags` bit 0 (value 1) as the calculated-label marker and Layout mode displays "Calculation" as the segment label. ✓ For a **quoted literal**, bit 0 is NOT set — native and generated captures both return `buttonFlags="2"` with the literal rendering as the label. ✓
 
 **Invalid calculations are comment-neutralised, not rejected.** A LabelCalc containing an invalid expression pastes successfully with the source wrapped in `/* */` in the calculation dialog — the label is inert and nothing errors anywhere. This is the same neutralisation behaviour Manage Database applies to invalid calcs in pasted table definitions. Validate calculation syntax before generating; FileMaker will not tell you. ✓
 
@@ -1577,18 +1646,19 @@ The `ExtendedAttributes > CharacterStyle` values should mirror the object's own 
 - **Dynamic (non-literal) `TitleCalc` on a non-front `TabPanel`** feeds the accumulator: without EA downstream its calc source migrates into the next EA-less `TextObj` (observed landing on a PopoverButton, destroying its label); with EA everywhere it is silently dropped instead. Generate dynamic titles only as quoted literals on non-front panels (§11). ✓
 - **PopoverButton `TextObj`s must carry `ExtendedAttributes`** — a bare `<TextObj flags="0"/>` was the leak absorber in testing. ✓
 
-**Still not retested:**
-- Fields carrying `PlaceholderText` (§5.6) — contaminates via the field's `Calculation` content, a different code path than `TextObj`'s `CharacterStyleVector`; whether `ExtendedAttributes` on the `FieldObj` (not the `TextObj`) fixes this is an open question. Keep these one-per-paste.
+**Resolved — fields carrying `PlaceholderText` (§5.6):** the placeholder's `Calculation` feeds the accumulator, but the standing sink-side fix covers it — with `ExtendedAttributes` on every `TextObj`, multiple placeholder fields batch freely (verified n=2 with full round-trip and n=4 interleaved with Texts and a Button). `ExtendedAttributes` on the `FieldObj` is inert for this purpose (controlled run, bare FieldObjs, equally clean), and the placeholder source survives rather than being silently dropped, unlike `TitleCalc`. The one-per-paste restriction is withdrawn. ✓
 
 ### §31.2 What was ruled out before the real cause was found
 
 For the record, since these were tested and matter if `ExtendedAttributes` ever turns out to be insufficient in some case: `CharacterStyle mask` value, font/size/colour/`Face`, and spatial distance between objects were all varied and none of them prevented the corruption on their own. ✓ Native-origin XML (hand-typed, or hand-typed-then-edited-with-a-tool) was also unaffected regardless of `ExtendedAttributes` — which in hindsight was the clue, since native exports always carry that block and generated XML didn't.
 
-### §31.3 Container-type findings (predate the fix — recheck if relying on these)
+### §31.3 Container-type findings — retested, resolved
 
-From a probe run before `ExtendedAttributes` was identified as the cause, without it present: `ButtonBar` segments did not accumulate against each other but still left a residue that contaminated a subsequent `GroupButton`; `GroupButton` children accumulated normally; `TabControl` panel titles (`TitleCalc`-based, not `TextObj`) were unaffected. Whether these container types behave differently once `ExtendedAttributes` is added to their internal `TextObj`s has not been retested.
+Pre-fix probing (no `ExtendedAttributes` anywhere) showed: `ButtonBar` segments did not accumulate against each other but left a residue that contaminated a subsequent `GroupButton`; `GroupButton` children accumulated normally; `TabControl` panel titles (`TitleCalc`-based, not `TextObj`) were unaffected.
+
+**Retested with `ExtendedAttributes` on every internal `TextObj`:** the exact failing sequence (three-segment `ButtonBar` immediately followed by a `GroupButton` with a Text child, trailing Text canary) came back clean — GroupButton child text verbatim, no residue, segments clean against each other, canary clean. The residue effect is covered by the standing §31 fix. ✓ (Segment *rendering* in that run was a separate finding — see §9.1.)
 
 ### §31.4 Generation rule
 
-Include `ExtendedAttributes` on every generated `TextObj` — Text, Button, ButtonBar segments, GroupButton children, and PopoverButtons — even when only one is being pasted; it costs nothing and removes the risk. Batches of all of these together are confirmed clean with the block present. `PlaceholderText` fields remain the exception: keep them one-per-paste until verified.
+Include `ExtendedAttributes` on every generated `TextObj` — Text, Button, ButtonBar segments, GroupButton children, and PopoverButtons — even when only one is being pasted; it costs nothing and removes the risk. Batches of all of these together are confirmed clean with the block present, and the rule also covers `PlaceholderText` fields — they need nothing extra and batch freely (§5.6). ✓
 
