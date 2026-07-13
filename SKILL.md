@@ -68,8 +68,8 @@ Claude reads this automatically when handling layout XML tasks. You do not need 
 **Review existing XML:**
 > Paste your fmxmlsnippet and ask: "Check this layout XML for paste-handler errors"
 
-**With a DDR or Save as XML export:**
-> Attach a DDR or a Save as XML export and Claude will use real field, layout, table occurrence, and relationship names from your solution. A Save as XML export works as well as a DDR for this — both carry the schema names.
+**With Save as XML export:**
+> Attach a Save as XML export and Claude will use real field, layout, table occurrence, and relationship names from your solution.
 
 ## Pasting into FileMaker
 
