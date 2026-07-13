@@ -39,6 +39,10 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 - Never default to `com.filemaker.theme.apex_blue` unless confirmed. The examples in this spec use `apex_blue` as a placeholder only.
 - Use the extracted identifier verbatim in every `<ThemeName>` element throughout the generated XML.
 
+### Clipboard behaviour: single-object copy
+
+**A single selected Text object copies to the system clipboard as plain text, not as `fmxmlsnippet` XML.** Two or more selected objects — of any type, including two Text objects together — copy correctly as layout XML. This affects any workflow, including the Inspector's own capture routines, that asks a user to "select one object and copy": a lone Text object silently produces no usable XML, with no error shown. When isolating a single Text object for analysis, select it alongside any other object (or a throwaway shape) and discard the extra object from the resulting snippet afterward. ✓
+
 ---
 
 ## §1 Wrapper
@@ -83,15 +87,12 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 |---|---|---|
 | 0 | 1 | Has `ConditionalFormatting` ✓ |
 | 2 | 4 | Object has a HideCondition ✓ |
-| 3 | 8 | Portal field row option ◎. Also observed natively as the sole flag on labelled button-family objects — plain ButtonBar segments and PopoverButtons both export `flags="8"` on FM 26 (context-dependent meaning; generated `flags="0"` binds fine on both) ◎ |
-| 8 | 256 | Object has icon (ButtonObj icon streams present) ◎ |
-| 9 | 512 | Layout part marker ○ |
+| 8 | 256 | **Field object: participates in Find requests ("Apply in Find Mode").** Confirmed on four Field objects across all four field-entry access states, additive and independent of every other flag ✓. Not icon presence — an icon-bearing standalone Button captured directly returned `flags="0"` at the Object level regardless of its icon. Icon presence lives entirely inside `ButtonObj` (displayType + FNAM/GLPH/SVG streams, see §19.3), never in Object flags. |
 | 12 | 4096 | Line/Rect: round-trips intact but no visible effect found anywhere in the FM Pro 26 Inspector — treat as an inert/legacy marker; do not generate expecting behaviour ✓ |
 | 13 | 8192 | Line/Rect: same as bit 12 — inert on round-trip in FM Pro 26 ✓ |
 | 14 | 16384 | Has `ToolTip` ✓. (Placeholder presence is a separate `FieldObj` flag, bit 17, not this Object bit.) |
-| 16 | 65536 | Named layout object (appears on natively named objects; NOT required for a generated `name` attribute to bind, and FM does not add it on paste) ◎ |
-| 24 | 16777216 | Field access-state marker / input mode ◎ (see §27; appears on 2026 fields carrying access states) |
-| 25 | 33554432 | Field access-state marker ○ (see §27) |
+| 24 | 16777216 | Field access-state marker — Browse mode, part of the full decode in §5.2 ✓ |
+| 25 | 33554432 | Field access-state marker — Find mode, part of the full decode in §5.2 ✓ |
 | 28 | 268435456 | WebDirect/rendering tier flag (set by FM, safe to omit) ◎ |
 | 29 | 536870912 | WebDirect/rendering tier flag (set by FM, safe to omit) ◎ |
 | 30 | 1073741824 | WebDirect/rendering tier flag (set by FM, safe to omit) ◎ |
@@ -101,20 +102,9 @@ The generation rule is simple: use `flags="0"` and let FileMaker set these.
 
 **Bits 28, 29, 30** appear on nearly every object in WebDirect-optimised layouts — set at the layout/theme level by FM, not per-object by the developer. Safe to omit when generating; FM will apply as needed.
 
-**Bit 24** appears on fields across many display types including edit boxes, calendars, and drop-downs. Likely a field-level input mode setting, not display-type specific.
+**Deleted (unreproduced on FM Pro 26.0.1.51):** bit 3 (8) — tested directly on a portal field with the row option genuinely engaged, returned `flags="0"`. Bit 9 (512) — no reproduction path exists; removed as an unverifiable single observation rather than carried forward. Bit 16 (65536) — tested directly on a natively-named object (Inspector's own name field), returned `flags="0"`; naming lives entirely in the `name` attribute, no flag bit is associated with it on any tested object type.
 
-Common production values (do not generate — FM sets these):
-
-| Value | Bits | Context |
-|---|---|---|
-| `260` | 2,8 | Standard nav ButtonBar segment |
-| `261` | 0,2,8 | Active nav ButtonBar segment |
-| `65544` | 3,16 | Named ButtonBar segment |
-| `65545` | 0,3,16 | Named active ButtonBar segment |
-| `-2147483648` | 31 | Locked object |
-| `16777216` | 24 | Field with touch input flag |
-| `268435456` | 28 | WebDirect layout object |
-| `805306368` | 28,29 | WebDirect layout object (tier 2) |
+**Removed:** the legacy production-values table (previously listing `260`/`261`/`256`/`65544`/`65545` as ButtonBar segment states) has been cut outright. §9.1 established that FM 26 encodes no segment state in Object flags at all; these values reflected no real mechanism and are not retained even as historical record.
 
 ---
 
@@ -216,13 +206,33 @@ self:normal .self
 | Bit | Value | Meaning |
 |---|---|---|
 | 0 | 1 | Include other value (radio/checkbox sets) — adds an "Other..." entry with its own checkbox/radio button, confirmed on both display types ✓ |
-| 2 | 4 | Not enterable in Browse mode ✓ |
+| 1 | 2 | **Select entire contents of field on entry.** Confirmed additive across all four field-entry access states (Edit, Select Only, View Only, Set by Calculation) — the Field Behavior "Select contents on entry" checkbox. Independent of every other bit; applies even to View Only fields (contents can still be select-and-copied on entry even when not editable) ✓ |
+| 2 | 4 | Not enterable in Browse mode — also the low bit of the Browse-mode access-state pair, see decode below ✓ |
+| 4 | 16 | Not enterable in Find mode — the Find-mode counterpart of bit 2, see decode below ✓ |
 | 5 | 32 | Tab to next object ✓ |
 | 10 | 1024 | Calendar popup button (with bit 19) ✓ |
 | 11 | 2048 | Auto-complete using existing values ✓ |
 | 15 | 32768 | Quick Find off — also sets `quickFind="0"` ✓ |
 | 19 | 524288 | Calendar popup button (with bit 10) ✓ |
 | 20 | 1048576 | Edit box marker — set when displayType=0 ✓ |
+| 24 | 16777216 | Field access-state marker — Browse mode, high bit of the Select Only pair, see decode below ✓ |
+| 25 | 33554432 | Field access-state marker — Find mode, high bit of the Select Only pair, see decode below ✓ |
+
+### §5.2.1 Field entry access states — full decode
+
+Browse mode and Find mode each have an independent access-state setting (Edit / View Only / Select Only / Set by Calculation), encoded as a bit-pair one apart — 2/4 for the View Only state, 24/25 for the Select Only state:
+
+| Browse mode | Find mode | FieldObj flags bits set (beyond baseline 5,20) |
+|---|---|---|
+| Edit | Edit | none (baseline) |
+| View Only | Edit | bit 2 |
+| Select Only | Edit | bit 24 |
+| Set by Calculation | Edit | bit 2 + bit 24, plus `CanEntryCalc` |
+| Edit | View Only | bit 4 |
+| Edit | Select Only | bit 25 |
+| Edit | Set by Calculation | bit 4 + bit 25, plus `CanEntryCalc` |
+
+Both dropdowns follow the identical pattern in their own mode: View Only sets the low bit alone, Select Only sets the high bit alone, Set by Calculation sets both bits together. **A single `CanEntryCalc` element governs whichever mode(s) are set to Set by Calculation** — there is only one calculation on the field, shared between modes, not a separate element per mode. See §27 for the `CanEntryCalc` element itself. ✓
 
 Common combinations:
 - `0` — default
@@ -232,6 +242,13 @@ Common combinations:
 - `32800` — tab + Quick Find off ✓
 - `525344` — tab + calendar button (bits 5,10,19) ✓
 - `1048608` — tab + edit box marker (bits 5,20) ✓
+- `1048610` — tab + edit box marker + select on entry (bits 1,5,20) ✓
+- `1048612` — tab + edit box marker + View Only, Browse (bits 2,5,20) ✓
+- `17825824` — tab + edit box marker + Select Only, Browse (bits 5,20,24) ✓
+- `17825828` — tab + edit box marker + Set by Calculation, Browse (bits 2,5,20,24) ✓
+- `1048624` — tab + edit box marker + View Only, Find (bits 4,5,20) ✓
+- `34603040` — tab + edit box marker + Select Only, Find (bits 5,20,24,25 — Find-mode Select Only stacks on top of Browse-mode Select Only in this capture) ✓
+- `34603056` — tab + edit box marker + Set by Calculation, Find, over Select Only Browse (bits 2,4,5,20,24,25) ✓
 
 ### §5.3 FieldObj displayType
 
@@ -421,7 +438,7 @@ Empty `SortList` element required even when no sort configured. ✓
 ```xml
 <Object type="Button" key="1" LabelKey="0" flags="0" rotation="0">
   <Bounds top="10" left="10" bottom="35" right="120"/>
-  <TextObj flags="0">
+  <TextObj flags="2">
     <ExtendedAttributes fontHeight="10" graphicFormat="0">
       <NumFormat flags="0" charStyle="0" negativeStyle="0" currencySymbol="" thousandsSep="0" decimalPoint="0" negativeColor="#0" decimalDigits="0" trueString="" falseString=""/>
       <DateFormat format="0" charStyle="0" monthStyle="0" dayStyle="0" separator="0">
@@ -444,6 +461,7 @@ Empty `SortList` element required even when no sort configured. ✓
       </CharacterStyle>
     </ExtendedAttributes>
     <Styles>
+      <!-- Any LocalCSS for this button's appearance (.self, .icon, .inner_border, etc.) goes here, inside TextObj > Styles -->
       <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
     </Styles>
     <CharacterStyleVector>
@@ -463,13 +481,14 @@ Empty `SortList` element required even when no sort configured. ✓
       <Script id="1" name="ScriptName"/>
     </Step>
   </ButtonObj>
-  <Styles>
-    <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
-  </Styles>
 </Object>
 ```
 
-Button label text lives in `TextObj > CharacterStyleVector > Style > Data`. `TextObj` is required on buttons. `LabelCalc` isn't functionally used for a static label — FM adds an empty one as a round-trip artifact (§19.1). **Render verified on FM 26:** a single generated Button with its label in `Data` pastes, renders the label correctly, and round-trips verbatim (FM adds the matching `ParagraphStyleVector` and strips a generated `Step id="0" name="None"` to an empty `ButtonObj`). The Data-label render failure is confined to ButtonBar segments (§9.1); standalone Buttons and PopoverButtons (§14) both genuinely label via `Data`. ✓ `ExtendedAttributes` is included above for the same reason as §6 — its absence caused multi-object Text paste corruption (§31); not yet directly retested for Button objects specifically, but apply it as a precaution since the mechanism is identical (`TextObj`).
+Button label text lives in `TextObj > CharacterStyleVector > Style > Data`. `TextObj` is required on buttons. `LabelCalc` isn't functionally used for a static label — FM adds an empty one as a round-trip artifact (§19.1). **Render verified on FM 26:** a single generated Button with its label in `Data` pastes, renders the label correctly, and round-trips verbatim (FM adds the matching `ParagraphStyleVector` and strips a generated `Step id="0" name="None"` to an empty `ButtonObj`). The Data-label render failure is confined to ButtonBar segments (§9.1); standalone Buttons and PopoverButtons (§14) both genuinely label via `Data`. ✓ `ExtendedAttributes` is included above for the same reason as §6 — its absence caused multi-object Text paste corruption (§31); confirmed necessary for Button objects too, same mechanism (`TextObj`).
+
+**Button styling placement, corrected.** All LocalCSS/FullCSS for a standalone Button's appearance — `.self`, `.icon`, `.inner_border`, and every other selector — must be generated inside `TextObj > Styles`, not in a separate object-level `Styles` block after `ButtonObj`. A `.self` background-color and `.icon` color placed in `TextObj > Styles` both survived, merged into `FullCSS`, and rendered correctly (confirmed with a pink button and a magenta icon in the same paste). The identical properties placed in an object-level `Styles` block after `ButtonObj` were silently dropped in three separate attempts — no error, no trace in the returned XML. There is no object-level `Styles` block on a standalone Button; do not generate one. See §23.
+
+**TextObj flags on standalone Buttons normalise to `2`, not `0`.** Confirmed across every standalone Button capture this session — FM 26 returns `TextObj flags="2"` regardless of what was generated. Generate `flags="2"` to match native shape.
 
 ### §8.1 ButtonObj attributes
 
@@ -617,7 +636,9 @@ The table below predates the §9.1 finding and came from the same capture genera
 
 - **Active segment** is a bar attribute: Specify Active Segment (fixed) serialises as `ButtonBarObj segmentKey="<active segment's key>"`; `segmentKey="0"` means none set. Verified by UI round trip — designating segment four returned `segmentKey` pointing at its key while the segment stayed `flags="8"`. ✓ Generate `segmentKey="0"` unless a fixed active segment is wanted.
 - **Object names** live purely in the `name` attribute and set no flag bit — verified both for paste-generated names (earlier) and for a UI-typed name on a bar, which exported `name` with `flags="0"`. ✓ The legacy `65544`/`65545` values (bit 16) reflect a mechanism FM 26 does not use.
-- The legacy values `260`/`261`/`256`/`65544`/`65545` from earlier captures should not be generated; their provenance is unresolved and now moot: per-segment icon captures confirmed that icons do NOT touch segment `Object flags` either — four segments with distinct icons all exported `flags="8"`, in both icon-only and icon-with-text arrangements. No FM 26 segment state is encoded in `Object flags`. ✓ The legacy values are historical record only. ○
+- The legacy values `260`/`261`/`256`/`65544`/`65545` from earlier captures should not be generated; their provenance is unresolved and now moot: per-segment icon captures confirmed that icons do NOT touch segment `Object flags` either — four segments with distinct icons all exported `flags="8"`, in both icon-only and icon-with-text arrangements. No FM 26 segment state is encoded in `Object flags`. ✓ These legacy values have been removed from §2.1 outright rather than retained as historical record, since no real mechanism was ever attached to them.
+
+**Icon colour confirmation.** A native-origin icon capture (Button Setup–added icon, `displayType="4"`, icon left of label) confirms the `-fm-icon-color` property renders correctly when placed in `TextObj > Styles > LocalCSS` under `.icon`, matching the standalone-Button placement rule in §8. Segment Object flags remained `flags="8"` regardless of icon presence. ✓
 
 ---
 
@@ -725,7 +746,7 @@ Every isolation test in this section held bit 4 constant (present) across both t
 | `273` | 0,4,8 | Scrolling, "When Scrolling", Reset unticked (bit 4 present) ✓ |
 | `397` | 0,2,3,7,8 | Sort + filter (with matching real content) + scrolling ("When Scrolling") + deletion, Reset ticked (bit 4 absent) — every bit-level prediction in this section confirmed simultaneously in one composite portal ✓ |
 | `157` | 0,2,3,4,7 | Sort + filter + scrolling + deletion, Reset unticked, as exported from a hand-configured portal ✓ |
-| `401` | 0,4,7,8 | Planner/single-row display ○ — unverified against current findings |
+| `401` | 0,4,7,8 | Allow Vertical Scrolling + Filter (real content + bit) + Reset Scroll Bar unticked + Show scroll bar: When Scrolling. Confirmed by direct construction matching this exact bit prediction, using a real relationship and a real `FilterCalc` ✓. The "planner/single-row display" label attached to earlier captures does not describe a distinct mechanism — it was a mislabelled ordinary combination of already-documented bits. |
 
 
 
@@ -825,15 +846,38 @@ Element order in `TabPanel`: `Bounds` → `Styles` → `TitleCalc` → `TabPanel
 | Attribute | Notes |
 |---|---|
 | `tabHeight` | Derived — FM recomputes from font and padding on paste (a generated `20` comes back `46`); emit any value ✓ |
-| `visPanelKey` | Key of currently visible panel. Generated value binds — a control generated pointing at its third panel opens with that panel front; FM rewrites the key to its reassigned panel key on round-trip ✓ |
-| `defaultVisPanelKey` | Key of panel shown by default — binds from generated XML, verified alongside `visPanelKey` ✓ |
-| `visPanelIndex` | 0-based index of visible panel — survives verbatim ✓ |
-| `defaultVisPanelIndex` | 0-based index of default panel — survives verbatim ✓ |
-| `tabWidthModifier` | Survives verbatim and renders. Semantics: acts as a **minimum tab width** — with modifier 150 all tabs return `tabWidth=150`; with modifier 70 tabs return 79/81/96, i.e. label text + padding wins when larger than the modifier ◎ |
+| `visPanelKey` | Key of currently visible panel. Confirmed independent of `defaultVisPanelKey`: a control copied with panel 2 front but panel 1 as Default Front Tab exports `visPanelKey`/`visPanelIndex` pointing at panel 2 and `defaultVisPanelKey`/`defaultVisPanelIndex` at panel 1, both intact ✓ |
+| `defaultVisPanelKey` | Key of the Default Front Tab — binds from generated XML and round-trips independently of the currently visible panel ✓ |
+| `visPanelIndex` / `defaultVisPanelIndex` | 0-based indices, survive verbatim, track their respective keys ✓ |
+| `tabWidthModifier` | The stored operand for the Tab Width setting. Persists dormant in modes that do not use it (a control in Label Width mode still carries and displays the last modifier value). Read per side in Margin mode, as a floor in Minimum mode, as the exact width (+2pt, see below) in Fixed mode ✓ |
 | `tabJustification` | Does not survive round-trip. ✓ — retested with 2-panel controls at values 0/1/2: the attribute is absent entirely from every returned `TabControlObj`, and all three rendered identically (tabs left-aligned, occupying only their own width). Confirmed non-functional/non-persistent via generation; do not rely on it. |
-| `tabFlagSet` | `264` and `312` both round-trip verbatim (no normalisation) and render identically — verified side by side in one paste. `328` observed in the wild. No behavioural difference identified between `264`/`312`; use `312`. ✓ |
+| `tabFlagSet` | Encodes the Tab Width mode as an enumeration on base `264`, stepping by 16 in dialog order — see table below ✓ |
 
-**Panel title serialisation.** A generated static `TitleCalc` on any panel (front or not) applies correctly on paste and converts to the `TextObj > CharacterStyleVector > Style > Data` form inside the `TabPanel` on the next copy. ✓ On generated-origin controls, FM 26 exports ALL panel titles as Data — front panel included, no `TitleCalc` anywhere, and the panel `TextObj`s come back bare (no `ExtendedAttributes`, `mask="0"`). The earlier claim that FM emits `TitleCalc` for the front/checked panel was not reproduced in any FM 26 capture this cycle; whether a hand-built (never-pasted) control differs is unverified — treat the front-panel `TitleCalc` export claim as withdrawn pending a native-origin capture. ◎
+### §11.1.1 tabFlagSet — Tab Width mode enumeration
+
+All five values round-trip verbatim, display the matching mode in Tab Control Setup, and render the predicted widths and behaviour. Verified with modifier 150 (and Minimum re-verified at modifier 70; Fixed re-verified with a fully typed, drag-free generation at modifier 100):
+
+| `tabFlagSet` | Tab Width mode | Uses modifier | Behaviour |
+|---|---|---|---|
+| `264` | Label Width | no | Each tab sized to its own label — natural widths |
+| `280` | Label Width + Margin of | yes, per side | Label width plus 2× modifier |
+| `296` | Width of Widest Label | no | All tabs sized to the widest label |
+| `312` | Minimum of | yes, as floor | `max(label width, modifier)` per tab |
+| `328` | Fixed Width of | yes, exact | All tabs = modifier + 2pt (see below); long labels clip |
+
+`tabLeftEdge` of each tab equals the previous tab's right edge minus 1pt (e.g. widths 150/150 give edges 0, 149) — adjacent tabs overlap by 1pt, the same inset convention as ButtonBar segments ✓
+
+**Fixed Width of returns `tabWidth = modifier + 2`, confirmed as a real constant, not measurement error.** Verified twice independently: once via manual drag-to-size (150 requested → 152 returned) and once via a fully typed, drag-free generation with no manual sizing step at all (100 requested → 102 returned, all three panels identical). The +2pt is a structural border/inset allowance FM applies uniformly in Fixed mode. ✓
+
+**Generation default: `tabFlagSet="264"`** (Label Width) with any `tabWidthModifier` value, for natural tabs. This supersedes earlier guidance to use `312`, which silently produces minimum-width behaviour whenever a label happens to be narrower than the modifier — the source of the historical "no behavioural difference between 264/312" claim, now withdrawn: the difference is invisible only when every label exceeds the modifier, which was true of the earlier test corpus. Emit `312` or `328` plus a meaningful modifier only when uniform tab widths are specifically wanted.
+
+**Resolved:** `328`, previously "observed in the wild, meaning unknown," is Fixed Width of.
+
+### Panel title serialisation
+
+**FM 26 exports every dialog-defined panel title as `TitleCalc`** — front and non-front panels alike, whether the name was entered by typing plainly into Tab Name or via Specify. Confirmed across every capture this session, including after explicitly renaming a panel by typing plain text into Tab Name: the title still returned as `TitleCalc`, and no panel `TextObj`/`Data` form appeared in any capture. ✓
+
+**Withdrawn, not reproduced:** the earlier claims that (a) a generated `TitleCalc` converts to the `TextObj > CharacterStyleVector > Style > Data` form on the next copy, and (b) FM 26 exports all panel titles as Data with bare panel `TextObj`s (no `ExtendedAttributes`, `mask="0"`). Neither behaviour appeared in any capture this cycle, on a build (26.0.1.51) identical to the one the original claims were pinned to. Treat the Data export form as historical/decode-only if encountered in archived snippets; do not generate it.
 
 **Dynamic titles: front panel only.** A non-literal `TitleCalc` on a NON-front panel does not survive generated paste — with `ExtendedAttributes` present throughout the batch it is silently dropped (blank tab); without, its calc source migrates into the next EA-less `TextObj` in the paste, destroying that object's label (§31). Generate dynamic titles only as quoted literals on non-front panels, or accept the loss. ✓
 
@@ -844,6 +888,10 @@ TitleCalc accepts a bare FM expression or a quoted string literal:
 <!-- Dynamic -->
 <TitleCalc><Calculation><![CDATA[Let(n = TO::count; "Tab" & Case(n > 0; " (" & n & ")"))]]></Calculation></TitleCalc>
 ```
+
+### §11.1.2 Checked-state border overrides (worked example)
+
+Overriding `border-*-style: none` on `self:checked .self` and `self:checked .inner_border` (and the `checkedfocus` equivalents) for a TabPanel survives as a genuine LocalCSS delta and renders — the active tab's border is removable per-state. This confirms `checked`/`checkedfocus` in §25.4's state vocabulary are independently stylable in practice, not just theoretically distinct. The override was retained (not pruned) on paste because it genuinely differs from the theme default (solid); see §25.3 for the delta-pruning behaviour that would otherwise strip a redundant override. ✓
 
 ---
 
@@ -884,7 +932,7 @@ SlidePanel `Bounds` are relative to SlideControl. ✓
 
 `visPanelKey`/`visPanelIndex` bind from generated XML — a control generated pointing at its second panel returns with that panel's reassigned key and `visPanelIndex` intact. ✓
 
-Native `SlideControlObj` carries its own `Styles` block before the panels (as `TabControlObj` does); a generated control without it still pastes, so it is not mandatory — include a minimal `ThemeName` block to match native shape. ◎ FM 26 exports SlidePanels with NO `Styles` element at all; do not generate one on panels. ✓
+Native `SlideControlObj` carries its own `Styles` block before the panels (as `TabControlObj` does); a generated control without it still pastes, so it is not mandatory — include a minimal `ThemeName` block to match native shape. **Confirmed:** two controls, one with a full `ThemeName` Styles block inside `SlideControlObj` and one without, produced structurally identical exports (FM synthesised the block onto the second) and both rendered identically with dots visible. ✓ FM 26 exports SlidePanels with NO `Styles` element at all; do not generate one on panels. ✓
 
 No `TitleCalc` — navigation is via dot indicators. A `TitleCalc` generated on a `SlidePanel` is dropped on paste. ✓
 
@@ -1103,6 +1151,14 @@ Additive and enable-gated: `5` = enabled + Fill Color, `7` = enabled + Text Colo
 | 7 | Value is >= (Greater than or equal to) ✓ |
 | 8 | Value is <= (Less than or equal to) ✓ |
 
+### §16.3 Value-op dual storage — a runtime trap
+
+**Value-comparison `Condition` items (op 1–8) store the operand in two places, and both must be generated correctly or the item is dialog-correct but runtime-dead.** `RangeBegin`/`RangeEnd` hold the raw comparison value(s) that the Format > Conditional Formatting dialog reads back — a field with `op="8"` and `RangeBegin>10` displays correctly as "less than or equal to 10" in the dialog. But the actual Browse-mode evaluation runs `Calculation`, which FM materialises as a real formula (e.g. `Self≤10`) — not the operator/value pair. A generated item with an empty or placeholder `Calculation` looks perfectly configured in the dialog and in the XML, yet silently never fires, or always fires (e.g. if `Calculation` is left as a bare constant like `10`, which evaluates as an always-true formula). Confirmed directly: toggling the operator dropdown away and back in the UI forced FM to regenerate the materialised calc from the same `op`/`RangeBegin`, after which the condition began working — proving the dialog state and the runtime state are stored and evaluated separately. ✓
+
+**Generation rule:** for value-comparison conditions, emit all three together — `op`, `RangeBegin`/`RangeEnd`, and a materialised `Calculation` in FM's own comparison form (e.g. `Self≤10`, using the actual `≤`/`≥`/`≠` glyphs FM uses, not ASCII substitutes) — never leave `Calculation` empty or generic when `op` is 1–8.
+
+This closes the earlier open question of whether CF `op=8` survives generation and round-trip structurally with correct dialog rendering — both are confirmed here, along with the runtime trap. See §23 for the failure-mode entry.
+
 ---
 
 ## §17 ToolTip
@@ -1250,16 +1306,18 @@ LocalCSS blocks support multiple pseudo-selectors beyond `.self`. All use the `s
 | Selector | Applies to | Purpose |
 |---|---|---|
 | `.self` | All objects | Primary object styling ✓ |
-| `.text` | Field, Text | Text/paragraph styling within the object ◎ |
-| `.icon` | Button, TabPanel | Icon colour and styling ◎ |
-| `.row` | Portal | Default row background ◎ |
+| `.text` | Field: renders — confirmed with a margin/padding override, visibly indented on paste ✓. Text object: LocalCSS on `.text` survives and merges into `FullCSS` but has **no visible effect** — confirmed with both a colour override and a padding override, neither rendered on a standalone Text object. Treat as a silent-failure selector on Text objects specifically (see §23); it only has real effect on Field objects. |
+| `.icon` | Button, TabPanel | Renders via **`-fm-icon-color`** (and `-fm-icon-padding`), not a plain `color` property. Confirmed by both a native icon-colour change and a generated icon-colour override, both landing correctly when placed in `TextObj > Styles` (see §8) ✓ |
+| `.row` | Portal | Default row background — confirmed, survives, merges, renders ✓ |
 | `.row_alt` | Portal | Alternating row background — enabled via `-fm-portal-alt-background: true/false` on `.self`, confirmed ✓ |
 | `.row_active` | Portal | Active/selected row background — enabled via `-fm-use-portal-current-row-style: true/false` on `.self`, confirmed ✓ |
-| `.button_bar_divider` | ButtonBar | Divider line between segments ◎ |
-| `.contents` | Portal, TabPanel | Inner content area ◎ |
-| `.inner_border` | Various | Inner border styling ◎ |
+| `.button_bar_divider` | ButtonBar | Renders via **longhand border properties** (`border-*-color`, `border-*-style`, `border-*-width`), not `background-color`. A generated `background-color` on this selector survives and merges into `FullCSS` but does not visibly change the divider; the divider line is drawn from its border. Confirmed with a 2pt coloured border rendering correctly ✓ |
+| `.contents` | Portal, TabPanel | Inner content area — confirmed as a distinct, independently-styled region from `.row`/`.panel`; survives, merges, renders ✓ |
+| `.inner_border` | Various | Renders via **longhand border properties only** — the `border:` shorthand is silently stripped and produces no LocalCSS at all on the returned object. Confirmed on a Field with a 2pt coloured longhand border rendering correctly, versus an earlier shorthand attempt that vanished entirely from the returned XML ✓ |
 | `.repeat_border` | Field | Repeating field border — generated `LocalCSS` survives, merges into `FullCSS`, and renders ✓ |
 | `.baseline` | Text | Bottom border only (underline style) — generated `LocalCSS` survives, merges into `FullCSS`, and renders ✓ |
+
+**Generated LocalCSS that duplicates the active theme's computed value for a given property is pruned from the returned `LocalCSS` on paste** — see §25.3. This explains why some correctly-rendering overrides come back with a shorter `LocalCSS` block than was generated; judge round-trip fidelity by rendered effect, not by byte-identical `LocalCSS` content.
 
 Example — portal with row styling:
 ```css
@@ -1388,10 +1446,15 @@ Round-trip behaviour of button steps (FM Pro 26):
 - `type="FMObjectList"` instead of `"LayoutObjectList"` — entire paste dropped silently ✓
 - Tabs instead of spaces — elements dropped silently ✓
 - Missing required Step children — step parameters dropped silently ✓
-- Unknown `ThemeName` — FM substitutes the file's default theme ◎
+- Unknown `ThemeName` — FM substitutes the file's default theme, both at render and in the returned XML (no poisoned identifier survives onward) ✓
 - Invalid calculation inside a calc element (confirmed for `LabelCalc`) — comment-neutralised to `/*…*/`, object pastes, calc inert, nothing errors (§19.2) ✓
 - Dynamic (non-literal) `TitleCalc` on a non-front tab panel — dropped when every batch `TextObj` carries `ExtendedAttributes`; migrated into the next EA-less `TextObj` otherwise (§11, §31) ✓
 - Web viewer generated without the +64 `externalFlagSet` bit — `FileMaker.PerformScript` is undefined in the page, no error anywhere (§15.1) ✓
+- Button/segment-level LocalCSS placed in an object-level `Styles` block instead of `TextObj > Styles` — pastes without error, produces no visual effect, absent from the returned XML entirely (§8) ✓
+- `.text` selector overrides on Text objects (as opposed to Field objects) — survive, merge into `FullCSS`, produce no visible effect (§20) ✓
+- `.button_bar_divider` and `.inner_border` styled with non-border properties, or with the `border:` shorthand — survive-or-vanish with no visible effect (§20) ✓
+- Value-comparison Conditional Formatting items (`op` 1–8) with an unmaterialised `Calculation` — the Format dialog shows a fully correct, ticked condition; only a Browse-mode behaviour check reveals it never evaluates correctly. Undetectable by structural audit or by opening the dialog (§16.3) ✓
+- A single selected Text object copying to the system clipboard as plain text instead of layout XML — no error shown, affects any single-object capture workflow (§0) ✓
 
 ---
 
@@ -1446,6 +1509,8 @@ When generating, emit a minimal `FullCSS` (the handful of properties you care ab
 **Applying a named style by generation works, by id. ✓** Emit `<CustomStyles><Name>FM-...UUID...</Name></CustomStyles>` carrying the style's real internal id, plus a minimal `FullCSS`, and on paste the object binds to that style and renders it. The binding survives a subsequent copy (the `CustomStyles` id comes back intact). A display name does NOT work — `<Name>fred</Name>` has nothing to bind to and the object falls back to its base appearance; the id is everything.
 
 The constraint is sourcing the id. A style's `FM-`UUID lives in the theme, not in any catalogue the clipboard format exposes. You can only obtain it from an object that already carries the style: one the user supplies as an exemplar, or one present in a copied set. There is no way to derive a style's id from its display name through this format. To give an object a named style's *look* without its id, reproduce the appearance as a `LocalCSS` override instead — visually equivalent, but not linked to the style, so it will not track later edits to it.
+
+**Delta-pruning on return.** FM prunes generated `LocalCSS` declarations that are redundant against the active theme's computed value before returning them on copy. Confirmed on a ButtonBar divider: a generated `border-*-style: solid` (matching the theme's own default divider style) was silently dropped from the returned `LocalCSS`, while the non-default `border-*-color` and `border-*-width` in the same block survived. This is not a failure — the declaration still applied at paste time — it is evidence that `LocalCSS` is stored/returned as a true delta against the theme, not as a literal echo of what was generated. When auditing round-trip fidelity, judge by rendered effect, not by byte-identical `LocalCSS` content. ✓
 
 ### §25.4 State vocabulary
 
@@ -1530,8 +1595,9 @@ FileMaker 2026 added calculation-driven control over object access states. The f
 - Scope: **fields only.** On a non-field object it is unsafe — a generated rectangle carrying `CanEntryCalc` failed to paste at all (the whole object was dropped, not just the element). Never attach it to anything but a field. ✓
 - Contains a standard `<Calculation>` with CDATA. ✓
 - A generated `CanEntryCalc` enforces on paste (a true calc allows entry, a false calc blocks it). Base `FieldObj` flags are fine; the high access flag bits a natively built field carries are not required for the calc to take effect. ✓
+- **The Object-level flag bits governing which access mode is active (bits 2/24 for Browse mode, bits 4/25 for Find mode) are documented in full in §5.2.1.** `CanEntryCalc` itself is a single, shared calculation element referenced by whichever bit-pair(s) are set to Set by Calculation — there is one calc per field, not one per mode. ✓
 
-**Frontier.** Only the field-entry state (`CanEntryCalc`) is captured. Other 2026 calc-driven access states, if any, will have their own trailing elements with their own tag names — not yet observed, do not guess them.
+**Closed.** A full sweep of the Field entry-behavior dialog (Edit / Select Only / View Only / Set by Calculation, in both Browse and Find modes) produced no new calc-driven element beyond `CanEntryCalc`. It is confirmed as the sole calc-driven access mechanism on FM Pro 26.0.1.51.
 
 ---
 
@@ -1582,10 +1648,12 @@ This spec covers the object-level clipboard format (`fmxmlsnippet type="LayoutOb
 
 ### §30.1 Not yet verified
 
-Do not assert these as fact; mark them ◎/○ if generating near them:
+### §30.1 Resolved this session
 
-- 2026 calc-driven access states other than `CanEntryCalc` — tag names not observed.
-- CF `op=8` survives generation and round-trip structurally (alongside an `op=0` item, correct Object flags); dialog rendering not visually confirmed.
+Both items previously listed here are now closed:
+
+- **2026 calc-driven access states beyond `CanEntryCalc`:** a full sweep of the Field entry-behavior dialog (all four access states, both Browse and Find modes) found no new tag. `CanEntryCalc` is confirmed as the sole calc-driven access mechanism; see §27 and §5.2.1 for the full bit decode.
+- **CF `op=8` dialog rendering:** confirmed both structurally and at the dialog — see §16.3 for the full value-op decode, including the runtime trap this uncovered (dialog-correct items with an unmaterialised `Calculation` never actually evaluate).
 
 ---
 
