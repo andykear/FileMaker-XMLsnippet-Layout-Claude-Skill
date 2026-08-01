@@ -6,7 +6,7 @@
 
 A Claude skill that gives AI models a deterministic, empirically verified foundation for generating and analysing FileMaker Layout mode XML (`fmxmlsnippet type="LayoutObjectList"`).
 
-Created by Andrew Kear of Clockwork Creative Technology and shared openly with the FileMaker/Claris community.
+Created by Andrew Kear of Clockwork Creative Technology and shared openly with the FileMaker/Claris community under CC BY 4.0. Attribution required on any reuse, adaptation or redistribution, including any derived or excerpted work.
 
 ---
 
@@ -46,16 +46,14 @@ The result is a formal specification for a format that Claris has never document
 SKILL.md                                   Claude skill definition
 README.md                                  This file
 references/
-  filemaker_layout_xml_rules.md            Full specification (v2.3, ~1600 lines)
+  filemaker_layout_xml_rules.md            Full specification (v2.5, ~1800 lines)
 ```
 
 ---
 
 ## Specification highlights
 
-Covers all 18 layout object types, the full theming/CSS serialization model, and a multi-object Text paste corruption bug most AI-to-FileMaker tooling wouldn't catch — root cause identified and fixed. Full detail, with round-trip verification markers throughout, is in `references/filemaker_layout_xml_rules.md`.
-
----
+Covers all 18 layout object types, the full theming/CSS serialization model, object anchoring, and a multi-object Text paste corruption bug most AI-to-FileMaker tooling wouldn't catch — root cause identified and fixed. Full detail, with round-trip verification markers throughout, is in `references/filemaker_layout_xml_rules.md`.
 
 ## Requirements
 
@@ -94,7 +92,7 @@ Once the skill is installed, Claude will automatically apply it when you ask for
 
 ## Pasting into FileMaker
 
-Layout mode requires the `fmxmlsnippet type="LayoutObjectList"` format on the clipboard in FileMaker's internal clipboard format — not plain text. This skill has been tested with the **MBS Plugin** istalled.
+Layout mode requires the `fmxmlsnippet type="LayoutObjectList"` format on the clipboard in FileMaker's internal clipboard format — not plain text. This skill has been tested with the **MBS Plugin** installed.
 
 ---
 
@@ -104,11 +102,13 @@ Pasting two or more Text objects without an `ExtendedAttributes` block on each `
 
 `ButtonBar` segments, `GroupButton` children, and `PlaceholderText` fields are all covered by the same fix — placeholder fields verified directly (multiple per paste, clean, with the block on every `TextObj`; the field itself needs nothing extra). The `ButtonBar` followed by `GroupButton` residue sequence has now been retested and is clean with the fix in place. Full detail in `references/filemaker_layout_xml_rules.md` §31.
 
-## Known limitation — layout retheming / local CSS removal
-Layout retheming is under active development and a primary goal. Reliably rethemeing a whole layout, stripping ad hoc LocalCSS overrides and rebinding objects to their proper named theme style, is not yet recommended for production layouts.
-The mechanics work: the whole layout round trips, non matched objects pass through verbatim, matched objects rebind. What is not yet settled is which objects should be treated as a match, and whether object types beyond fields and text behave the same way. Until that is proven across more layouts, treat retheme output as a draft to review, not a paste and trust result.
-When it lands it will ship with its own instruction guide. The workflow is involved enough to warrant separate documentation rather than a few usage lines here.
-This is the most challenging problem across all the repos and is being worked through deliberately rather than shipped early.
+## Known limitation: whole-layout retheming
+
+Stripping ad hoc LocalCSS overrides across a whole layout and rebinding objects to their proper named theme style is under active development and not yet recommended for production layouts.
+
+The object-level mechanic is verified (§25.6): the layout round-trips, unmatched objects pass through verbatim, matched objects rebind. What is not settled is which objects should be treated as a match, and whether object types beyond fields and text behave the same way. Until that is proven across more layouts, treat retheme output as a draft to review rather than a paste-and-trust result. Note also the untested key-rebinding caution in §25.6 for layouts with attached labels or a defined tab order.
+
+It will ship with its own instruction guide when it lands. This is the hardest problem across all the repos and is being worked deliberately rather than shipped early.
 
 ---
 
@@ -135,7 +135,7 @@ Strips API keys, passwords and internal hostnames out of FileMaker XML before yo
 
 ## Licence
 
-CC BY 4.0 — free to use, share, and adapt with attribution.
+CC BY 4.0. Free to use, share and adapt with attribution. Attribution is required on any reuse, adaptation or redistribution, including any derived or excerpted work: vendoring the spec into another project, or lifting a section into another skill, both count.
 
 ## Contributing
 
@@ -147,7 +147,8 @@ Found something that doesn't round-trip? A production export that contradicts th
 
 | Version | Notes |
 |---|---|
-| 2.4 | Full closure pass against FileMaker Pro 26.0.1.51. Observed items now fully verfified - production testing will continue|
+| 2.5 | Object anchoring verified. WebViewer handling enhanced. Earlier flag readings corrected. Token reduction pass across the spec. |
+| 2.4 | Full closure pass against FileMaker Pro 26.0.1.51. Observed items now fully verified; production testing continues.|
 | 2.3 | Eight mechanisms corrected by round trip verification against FileMaker Pro 26.0.1.51. The spec is now close to fully verified. |
 | 2.2 | Continued verification and hardening |
 | 2.1 | **We found a real FileMaker bug — and fixed it** (see "Multi-object Text/Button paste corruption and the fix" above). Plus: Portal behaviour completely re-verified end to end (several long-standing assumptions turned out wrong once actually tested), and a fresh batch of field/formatting rules confirmed. The most rigorously tested release yet. |

@@ -1,83 +1,66 @@
 ---
 name: filemaker-layout-xml
-description: Use this skill whenever the user wants to work with FileMaker layout XML. This includes generating paste-ready layout object XML (fmxmlsnippet type LayoutObjectList) from descriptions, reviewing layout XML for silent paste-handler failures, or analysing Save as XML layout exports. Trigger any time the user mentions FileMaker layouts, layout objects, fields, portals, tab controls, popovers, button bars, web viewers, or LayoutObjectList. Always perform the theme pre-flight before generating. Do not attempt FileMaker layout XML from memory alone.
+description: Use this skill whenever the user wants to work with FileMaker layout XML. This includes generating paste-ready layout object XML (fmxmlsnippet type LayoutObjectList) from descriptions, reviewing layout XML for silent paste-handler failures, or analysing Save as XML layout exports. Trigger any time the user mentions FileMaker layouts, layout objects, fields, portals, tab controls, popovers, button bars, web viewers, anchoring or autosizing, or LayoutObjectList. Always perform the theme pre-flight before generating, and set object anchoring deliberately whenever an object must resize with the window. Do not attempt FileMaker layout XML from memory alone.
 ---
 
 # FileMaker Layout XML Skill
 
-This skill gives Claude a deterministic, empirically verified foundation for generating FileMaker layout object XML — the `fmxmlsnippet type="LayoutObjectList"` clipboard format used by FileMaker's Layout mode paste handler.
+Created by Andrew Kear of Clockwork Creative Technology and shared openly with the FileMaker/Claris community under CC BY 4.0. Attribution required on any reuse, adaptation or redistribution, including any derived or excerpted work.
 
-Created by Andrew Kear of Clockwork Creative Technology and shared openly with the FileMaker/Claris community.
+Deterministic generation and analysis of `fmxmlsnippet type="LayoutObjectList"`, FileMaker's Layout mode clipboard format. Full specification in `references/filemaker_layout_xml_rules.md`.
 
-## What this skill does
-
-When this skill is active, Claude will:
-
-- Generate paste-ready layout XML from plain descriptions ("add a field, a label, and a button to this layout")
-- Review existing layout XML for silent-failure risks before you paste it
-- Analyse Save-as-XML exports to understand layout structure
-- Generate correctly ordered elements, correct flag values, and correct minimal structures — without guessing
-
-## Critical: always include ExtendedAttributes on generated Text/Button objects
-
-Pasting two or more Text objects without an `ExtendedAttributes` block on each `TextObj` causes FileMaker to silently concatenate their text together at paste time. Always include a standard `ExtendedAttributes` block (matching the object's own `CharacterStyle`) on every generated Text and Button object — confirmed to eliminate the corruption entirely at n=2 and n=3 objects in one paste. Never omit it, even for a single object — it costs nothing and removes the risk.
-
-`Button` objects, `ButtonBar` segments, `GroupButton` children, PopoverButton labels, and fields with `PlaceholderText` are confirmed clean in batches with the block present — placeholder fields need nothing extra and batch freely. One thing remains dangerous: dynamic calculated titles on non-front tab panels (they don't survive batch paste — use quoted literals). Full detail in `references/filemaker_layout_xml_rules.md` §31 and §11.
-
-## Critical: ButtonBar segment labels go in LabelCalc, not Data
-
-On FM 26, segment label text placed in `CharacterStyleVector > Data` survives round-trip byte-perfect and renders as a blank segment — the XML passes every structural audit and fails only on screen. Generate segment labels in a `<LabelCalc>` element as the last child of each segment Button (after `ButtonObj`), with `Data` left empty, segment `flags="8"`, and an empty `ButtonObj buttonFlags="2" iconSize="16"`. PopoverButtons are the exact inverse: label goes in `Data` like a Text object, and `LabelCalc` must not be generated on them. Full detail in §9, §9.1, and §14.
+Most rules below concern silent failures: the XML pastes without error and is wrong on screen or in behaviour, and no structural audit catches it.
 
 ## Pre-flight: theme identification (mandatory)
 
-Every layout object must carry the correct `<ThemeName>` identifier. Using the wrong theme causes text doubling and CSS class names rendering as visible text when the XML is pasted.
+Every object must carry the target layout's `<ThemeName>` verbatim. The wrong identifier causes text doubling and CSS class names rendering as visible text.
 
-**Before generating any layout XML:**
+1. If the user supplied any layout XML, clipboard export or Save as XML, extract it: `grep -m1 "ThemeName" file.xml`
+2. If not, ask before generating. The user gets it by copying any object from the target layout and pasting into a text editor.
+3. Never default to `com.filemaker.theme.apex_blue`. It is a placeholder in the examples only.
 
-1. If the user has uploaded any XML file containing layout objects — whether a clipboard paste export (`fmxmlsnippet type="LayoutObjectList"`) or a Save-as-XML export — extract the theme from it:
-   ```
-   grep -m1 "ThemeName" uploaded_file.xml
-   ```
-   Custom themes have identifiers like `com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7`. Use this string verbatim in every `<ThemeName>` element.
+Ask first. Do not generate and then ask.
 
-2. If no file is available, ask the user for the theme identifier before generating. Tell them how to find it:
-   - Select any object on the target layout
-   - Copy it (Cmd+C)
-   - Paste into a text editor — the `<ThemeName>` value will be in the XML
+## ExtendedAttributes on every TextObj
 
-3. Never default to `com.filemaker.theme.apex_blue` unless the user has confirmed that is the actual theme in use.
+Two or more Text objects pasted without an `ExtendedAttributes` block on each `TextObj` causes FileMaker to concatenate their text at paste time. Include a standard block mirroring the object's own `CharacterStyle` on every Text, Button, ButtonBar segment, GroupButton child and PopoverButton, even for a single object.
 
-Do not generate XML and then ask for the theme. Ask first, or extract it from uploaded files first.
+Dynamic calculated titles on non-front tab panels remain unsafe in a batch: use quoted literals (§11, §31).
 
----
+Not required on `ExternalObj`; omit it there (§15).
 
-## Specification reference
+## ButtonBar segment labels go in LabelCalc, not Data
 
-The full specification is in `references/filemaker_layout_xml_rules.md`.
+Segment text in `CharacterStyleVector > Data` round-trips byte-perfect and renders blank. Put segment labels in `<LabelCalc>` as the last child of each segment Button, `Data` empty, segment `flags="8"`, empty `ButtonObj buttonFlags="2" iconSize="16"`.
 
-Claude reads this automatically when handling layout XML tasks. You do not need to reference it in your prompts.
+PopoverButtons are the exact inverse: label in `Data`, never generate `LabelCalc` (§9, §9.1, §14).
 
-## Usage
+## Anchoring must be set deliberately
 
-**Generate layout objects:**
-> "Generate XML for a field showing Contacts::FirstName at position 100,50 with a label to its left"
+`Object flags` bits 28 to 31 are object anchoring and the only part of that field a generator should author. Mixed polarity: left and top inverted, right and bottom direct.
 
-**Generate a complete layout snippet:**
-> "Create a portal showing related line items with three fields: description, quantity, and unit price. Include sort by line number ascending."
+`flags="0"` is left and top, FileMaker's default, correct for most objects. An object meant to fill a resizable window generated with `0` pastes cleanly, looks right at the design size, and never grows. Use `-1073741824` for all four sides. Sixteen-state table in §2.2.
 
-**Review existing XML:**
-> Paste your fmxmlsnippet and ask: "Check this layout XML for paste-handler errors"
+When analysing a DDR or Save as XML export, anchoring is in `LayoutObject > Options` with all four bits direct and unsigned: `clipboard = ddr XOR 0x30000000` (§2.3).
 
-**With Save as XML export:**
-> Attach a Save as XML export and Claude will use real field, layout, table occurrence, and relationship names from your solution.
+## Keep a snippet under about 150 KB
 
-## Pasting into FileMaker
+Above roughly 150 KB, FileMaker pastes every object and silently discards every `Calculation` element. Objects arrive correctly named, positioned and styled, displaying nothing. There is no per-calculation length limit; the constraint is the whole paste. Split large batches (§15.4).
 
-Layout mode requires the `fmxmlsnippet type="LayoutObjectList"` format on the clipboard in FileMaker's internal clipboard format — not plain text. This skill has been tested with the **MBS Plugin** installed. Plugin-free clipboard conversion options are available in the FileMaker community and should work with this format, but have not been tested by Clockwork.
+## Web viewers
 
-## What this skill does not cover
+`externalFlagSet="32865"` for a viewer hosting an HTML UI. `32781` for plain URL display.
 
-- DDR (`LayoutCatalog` / `LayoutObject`) format — that is a different serialisation
-- Chart objects (`typeID="CHRT"`) — these contain binary data not reproducible via paste
-- Graphic objects — image data is not portable
-- Script step library — see the companion FileMaker Script XML Skill
+`+64` gates whether `FileMaker.PerformScript()` reaches FileMaker. Without it the `FileMaker` object still exists in the page and calls return normally while going nowhere, so `typeof FileMaker` proves nothing.
+
+`+4` and `+8` draw progress bar and status chrome at a fixed height, which swallows a short viewer entirely: a 46pt viewer showed no page content at all. Omit both on any small viewer and always for an app host.
+
+`name` on the Object element is required for any bridged viewer. Suppress the default border for full-bleed with a `LocalCSS` `border-*-style: none` block (§15.2).
+
+## Named theme styles apply by name
+
+`<CustomStyles><Name>STYLE-NAME</Name></CustomStyles>` plus `ThemeName` binds a user-created theme style, no exemplar object needed. Ask the user for the style name. A name absent from the target theme is dropped silently and the object falls back to base appearance (§25.3).
+
+## Scope
+
+Generation targets the clipboard format only. DDR and Save as XML are a separate serialisation, read for analysis but never generated; layout part styling, backgrounds and theme palettes live there and are not carried by the clipboard (§30). Charts (`typeID="CHRT"`) and graphics carry binary data and are not generatable. Script steps are covered by the companion FileMaker Script XML Skill.
