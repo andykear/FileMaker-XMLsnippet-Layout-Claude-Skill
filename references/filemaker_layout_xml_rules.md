@@ -1,8 +1,10 @@
 # FileMaker Layout XML Spec
 
+Created by Andrew Kear of Clockwork Creative Technology and shared openly with the FileMaker/Claris community under CC BY 4.0. Attribution required on any reuse, adaptation or redistribution, including any derived or excerpted work.
+
 Paste-ready FileMaker layout object XML (`fmxmlsnippet type="LayoutObjectList"`), empirically derived from round-trip testing across multiple applications and themes.
 
-**✓** = round-trip verified  **◎** = observed across multiple layouts  **○** = single-observation hypothesis
+**✓** = round-trip verified  **◎** = observed, or verified in one scope and expected to generalise  **○** = unverified: single observation, hypothesis, or survives round-trip with behaviour unconfirmed
 
 **Methodology note:** ✓ certifies round-trip *survival*. Survival does not guarantee *rendering* — FM 26 will faithfully round-trip elements its renderer no longer reads (see §9.1). Where a claim concerns on-screen behaviour, visual confirmation is stated explicitly.
 
@@ -36,7 +38,7 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 
 - If the user uploads any XML file containing layout objects, extract `ThemeName` from it before generating anything. ✓
 - If no file is provided, ask for the identifier before generating — not after.
-- Never default to `com.filemaker.theme.apex_blue` unless confirmed. The examples in this spec use `apex_blue` as a placeholder only.
+- Never default to `com.filemaker.theme.apex_blue` unless confirmed. It is a placeholder in the examples only.
 - Use the extracted identifier verbatim in every `<ThemeName>` element throughout the generated XML.
 
 ### Clipboard behaviour: single-object copy
@@ -75,13 +77,13 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 | `type` | See §3 |
 | `key` | FM reassigns on paste — any integer, duplicates safe ✓ |
 | `LabelKey` | Key of associated label object. `0` = no label ✓ |
-| `flags` | **Use `0` for generation.** See §2.1 |
+| `flags` | **Use `0` for generation, except anchoring.** Bits 28-31 are object anchoring and are settable. See §2.1 and §2.2 |
 | `rotation` | Tenths of degrees. `0` = no rotation, `900` = 90°, `1800` = 180°. **Text and Button objects only** — confirmed round-trip, both values render correctly rotated. Confirmed NOT functional on shapes: a `Rect` generated with `rotation="900"` pasted with no visible rotation and `FullCSS` came back with `-fm-rotation: 0` regardless of the value set. Do not rely on `rotation` for shapes; it is present on every `Object` element but only Text/Button honour it. ✓ |
 | `name` | Optional. The layout object name. Round-trips on Button, ButtonBar, individual bar segments, and WebViewers ✓. FM does not set flags bit 16 on paste-generated named objects — the attribute alone is sufficient. |
 
 ### §2.1 Object flags — generation rule
 
-**Use `flags="0"` for all generated objects.** FM sets these from object state. The table below documents observed values for analysis purposes — do not set these when generating.
+**Use `flags="0"` for all generated objects except when setting anchoring.** Bits 0 to 25 are set by FileMaker from object state and must not be written. Bits 28 to 31 are object anchoring: they are both readable and settable, and are the one part of this field a generator may legitimately author. `flags="0"` decodes to the FileMaker default of left and top anchored, so the zero default remains correct for any object that does not need to resize. See §2.2.
 
 | Bit | Value | Meaning |
 |---|---|---|
@@ -93,18 +95,109 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 | 14 | 16384 | Has `ToolTip` ✓. (Placeholder presence is a separate `FieldObj` flag, bit 17, not this Object bit.) |
 | 24 | 16777216 | Field access-state marker — Browse mode, part of the full decode in §5.2 ✓ |
 | 25 | 33554432 | Field access-state marker — Find mode, part of the full decode in §5.2 ✓ |
-| 28 | 268435456 | WebDirect/rendering tier flag (set by FM, safe to omit) ◎ |
-| 29 | 536870912 | WebDirect/rendering tier flag (set by FM, safe to omit) ◎ |
-| 30 | 1073741824 | WebDirect/rendering tier flag (set by FM, safe to omit) ◎ |
-| 31 | -2147483648 | Locked in layout mode — FM-computed, not settable by generation. Confirmed: an object pasted with this flag set directly was not locked (fully draggable in Layout mode). Same pattern as portalFlags bits 3/7 (§10.2) and Object flags bit 0 for ConditionalFormatting (§16) — this class of "descriptive" flag reflects real object state and cannot be switched on by writing the bit. ✓ |
+| 28 | 268435456 | Anchoring: **left anchor OFF**. Inverted sense. See §2.2 ✓ |
+| 29 | 536870912 | Anchoring: **top anchor OFF**. Inverted sense. See §2.2 ✓ |
+| 30 | 1073741824 | Anchoring: **right anchor ON**. See §2.2 ✓ |
+| 31 | -2147483648 | Anchoring: **bottom anchor ON**. See §2.2 ✓ |
 
-The generation rule is simple: use `flags="0"` and let FileMaker set these.
+The generation rule for bits 0 to 25 is simple: use `flags="0"` and let FileMaker set these. Bits 28 to 31 are the exception and are covered in §2.2.
 
-**Bits 28, 29, 30** appear on nearly every object in WebDirect-optimised layouts — set at the layout/theme level by FM, not per-object by the developer. Safe to omit when generating; FM will apply as needed.
+**Do not generate bits 3 or 16.** A portal field with the row option engaged, and a natively-named object, both return `flags="0"`. Object naming lives entirely in the `name` attribute; no flag bit is associated with it on any object type. ✓
 
-**Deleted (unreproduced on FM Pro 26.0.1.51):** bit 3 (8) — tested directly on a portal field with the row option genuinely engaged, returned `flags="0"`. Bit 9 (512) — no reproduction path exists; removed as an unverifiable single observation rather than carried forward. Bit 16 (65536) — tested directly on a natively-named object (Inspector's own name field), returned `flags="0"`; naming lives entirely in the `name` attribute, no flag bit is associated with it on any tested object type.
+**Bits 1 and 9 occur on FM 26 output with no known cause.** Observed on consecutive `ExternalObject` (WEBV) captures placed identically: `flags="0"`, `flags="2"` and `flags="512"` across three objects, none set deliberately. Do not generate either; do not treat their presence as meaningful when analysing. ○
 
-**Removed:** the legacy production-values table (previously listing `260`/`261`/`256`/`65544`/`65545` as ButtonBar segment states) has been cut outright. §9.1 established that FM 26 encodes no segment state in Object flags at all; these values reflected no real mechanism and are not retained even as historical record.
+**Never generate `260`, `261`, `256`, `65544` or `65545`.** FM 26 encodes no ButtonBar segment state in Object flags at all (§9.1). ✓
+
+---
+
+### §2.2 Object anchoring (autosizing)
+
+Object anchoring is encoded in `Object flags` bits 28 to 31. The polarity is mixed: **left and top are stored inverted**, **right and bottom are stored directly**. An object with default anchoring therefore emits `flags="0"`.
+
+| Bit | Value | Meaning | Sense |
+|---|---|---|---|
+| 28 | 268435456 | Left anchor **off** | inverted |
+| 29 | 536870912 | Top anchor **off** | inverted |
+| 30 | 1073741824 | Right anchor **on** | direct |
+| 31 | -2147483648 | Bottom anchor **on** | direct |
+
+Values are signed 32-bit. Any combination including bit 31 serialises negative.
+
+#### Anchor values
+
+All sixteen states. Nine were captured by round-trip copy on WebViewer objects, FileMaker Pro 26, macOS, including three predicted before capture, and confirmed in the generation direction; the rest follow from four independent bits. ✓
+
+Verified across object types: Text, WebViewer and Rectangle objects generated at all eight distinct anchor states each landed with exactly the intended anchoring, confirmed against the DDR export of the same layout (§2.3). The decode is object-type independent. ✓
+
+| Anchors | `flags` |
+|---|---|
+| left + top (FileMaker default) | `0` |
+| none | `805306368` |
+| top | `268435456` |
+| left | `536870912` |
+| right | `1879048192` |
+| bottom | `-1342177280` |
+| top + right | `1342177280` |
+| left + right | `1610612736` |
+| left + bottom | `-1610612736` |
+| top + bottom | `-1879048192` |
+| right + bottom | `-268435456` |
+| left + top + right | `1073741824` |
+| left + top + bottom | `-2147483648` |
+| left + right + bottom | `-536870912` |
+| top + right + bottom | `-805306368` |
+| left + top + right + bottom | `-1073741824` |
+
+#### Generation rule
+
+Emit `flags="0"` unless the object must resize with the window. `0` is left and top anchored, FileMaker's default for a newly placed object.
+
+Set the bits deliberately for anything that must stretch or reposition. Use `-1073741824` for a full-bleed object such as a web viewer hosting an integrated HTML UI (§15).
+
+**An object generated with `flags="0"` and intended to fill a resizable window pastes, renders correctly at the design size, and then does not grow.** Nothing errors, nothing is dropped, and no structural audit catches it.
+
+#### Not portable to the DDR format
+
+DDR and Save as XML use the same four bits with different polarity. See §2.3 for the conversion.
+
+---
+
+### §2.3 Anchoring in DDR / Save as XML
+
+`LayoutObject > Options` carries the same four anchor bits as the clipboard `Object flags`, but **all four are direct** and the value is unsigned.
+
+| Bit | Value | DDR meaning |
+|---|---|---|
+| 28 | 268435456 | Left anchor **on** |
+| 29 | 536870912 | Top anchor **on** |
+| 30 | 1073741824 | Right anchor **on** |
+| 31 | 2147483648 | Bottom anchor **on** |
+
+No anchors is `0`; all four is `4026531840`. The clipboard's inverted left and top bits are a clipboard-only convention.
+
+#### Conversion
+
+```
+clipboard_flags = ddr_options XOR 0x30000000   (then read as signed 32-bit)
+ddr_options     = clipboard_flags XOR 0x30000000
+```
+
+| Anchors | DDR `Options` | Clipboard `flags` |
+|---|---|---|
+| none | `0` | `805306368` |
+| left + top | `805306368` | `0` |
+| top | `536870912` | `268435456` |
+| left | `268435456` | `536870912` |
+| right | `1073741824` | `1879048192` |
+| bottom | `2147483648` | `-1342177280` |
+| left + top + right | `1879048192` | `1073741824` |
+| all four | `4026531840` | `-1073741824` |
+
+#### Verification
+
+Eight anchor states generated as clipboard XML across three object types (Text, WebViewer, Rectangle), pasted, then read back from a Save as XML export of the same file. All twenty-four objects matched, and the eight paired values satisfy the XOR relationship exactly. FileMaker Pro 26.0.1.51, macOS. ✓
+
+Anchoring is therefore readable directly from a DDR, which matters for whole-solution analysis where no clipboard round-trip is available. `Options` also appears on `Part > Definition` with an unrelated meaning; only `LayoutObject > Options` carries anchoring.
 
 ---
 
@@ -147,10 +240,11 @@ Minimal form — sufficient for generation: ✓
 
 These are **round-trip artifacts** — FM adds them on export but does not require them on paste. Omit when generating:
 - `FullCSS` — FM computes from `ThemeName` + `LocalCSS` ✓
+- `ExtendedAttributes` on `ExternalObj` (WebViewer) — not required and not added on paste; omit ✓
 - `ExtendedAttributes` on `FieldObj` — FM generates from field type and formatting settings. Also inert for §31 purposes (including on `PlaceholderText` fields — the protection is sink-side, on `TextObj`s), so omission is safe in every case ✓
 - `DDRInfo` — FM populates from the file's own field registry ✓
 - `ParagraphStyleVector` — FM adds on export; not required for paste ✓
-- `SlidePanel > Styles` — not required for paste ✓; FM 26 exports SlidePanels with no `Styles` element at all, so the earlier "FM adds on export" observation no longer reproduces
+- `SlidePanel > Styles` — FM 26 exports SlidePanels with no `Styles` element at all; not required for paste ✓
 - Empty `<HideCondition>` elements (ButtonBar segments `findMode="True"`, some portal fields `findMode="False"`) — FM adds on export; omit ✓
 
 **Exception: `ExtendedAttributes` on a `TextObj` is required, not optional, whenever more than one `TextObj`-bearing object is being pasted in the same operation.** Omitting it is the root cause of the multi-object text corruption in §31 — include it on every generated Text/Button object. This is the one item in this list that is not safe to omit.
@@ -488,7 +582,7 @@ Button label text lives in `TextObj > CharacterStyleVector > Style > Data`. `Tex
 
 **Button styling placement, corrected.** All LocalCSS/FullCSS for a standalone Button's appearance — `.self`, `.icon`, `.inner_border`, and every other selector — must be generated inside `TextObj > Styles`, not in a separate object-level `Styles` block after `ButtonObj`. A `.self` background-color and `.icon` color placed in `TextObj > Styles` both survived, merged into `FullCSS`, and rendered correctly (confirmed with a pink button and a magenta icon in the same paste). The identical properties placed in an object-level `Styles` block after `ButtonObj` were silently dropped in three separate attempts — no error, no trace in the returned XML. There is no object-level `Styles` block on a standalone Button; do not generate one. See §23.
 
-**TextObj flags on standalone Buttons normalise to `2`, not `0`.** Confirmed across every standalone Button capture this session — FM 26 returns `TextObj flags="2"` regardless of what was generated. Generate `flags="2"` to match native shape.
+**TextObj flags on standalone Buttons normalise to `2`, not `0`.** FM 26 returns `TextObj flags="2"` regardless of what was generated, across every standalone Button capture. Generate `flags="2"` to match native shape. ✓
 
 ### §8.1 ButtonObj attributes
 
@@ -620,7 +714,7 @@ Sets `Object flags` bit 2 (value 4). ✓
 
 Segment label text generated in `CharacterStyleVector > Style > Data` (and mirrored in `ParagraphStyleVector`) pastes without error, survives copy-back **byte-perfect including FM adding matching ParagraphStyleVector entries**, and renders as a blank segment in both Layout and Browse mode. The XML passes any structural audit; only a visual check catches it. Confirmed on FM 26 at three segments generated (blank) against native capture (labels in `LabelCalc`, `Data` empty) and generated `LabelCalc` (renders). ✓
 
-Earlier revisions of this spec stated the reverse ("label text in `Data` ✓; `LabelCalc` is ignored ✓"). Those marks were earned on round-trip **survival**, which remains true, but the render path was never separately pinned. Whether the mechanism changed in an FM release or was always LabelCalc-driven is not established. Current findings are pinned to FileMaker Pro 26.0.1.51 (macOS); an FM 25 comparison would settle it.
+Pinned to FileMaker Pro 26.0.1.51 (macOS). Whether earlier FM releases used the same render path is not established. ○
 
 **Button Object flags in ButtonBar:**
 
@@ -636,7 +730,7 @@ The table below predates the §9.1 finding and came from the same capture genera
 
 - **Active segment** is a bar attribute: Specify Active Segment (fixed) serialises as `ButtonBarObj segmentKey="<active segment's key>"`; `segmentKey="0"` means none set. Verified by UI round trip — designating segment four returned `segmentKey` pointing at its key while the segment stayed `flags="8"`. ✓ Generate `segmentKey="0"` unless a fixed active segment is wanted.
 - **Object names** live purely in the `name` attribute and set no flag bit — verified both for paste-generated names (earlier) and for a UI-typed name on a bar, which exported `name` with `flags="0"`. ✓ The legacy `65544`/`65545` values (bit 16) reflect a mechanism FM 26 does not use.
-- The legacy values `260`/`261`/`256`/`65544`/`65545` from earlier captures should not be generated; their provenance is unresolved and now moot: per-segment icon captures confirmed that icons do NOT touch segment `Object flags` either — four segments with distinct icons all exported `flags="8"`, in both icon-only and icon-with-text arrangements. No FM 26 segment state is encoded in `Object flags`. ✓ These legacy values have been removed from §2.1 outright rather than retained as historical record, since no real mechanism was ever attached to them.
+- **No FM 26 segment state is encoded in `Object flags`.** Four segments with distinct icons all exported `flags="8"`, in both icon-only and icon-with-text arrangements. Never generate `260`, `261`, `256`, `65544` or `65545`. ✓
 
 **Icon colour confirmation.** A native-origin icon capture (Button Setup–added icon, `displayType="4"`, icon left of label) confirms the `-fm-icon-color` property renders correctly when placed in `TextObj > Styles > LocalCSS` under `.icon`, matching the standalone-Button placement rule in §8. Segment Object flags remained `flags="8"` regardless of icon presence. ✓
 
@@ -688,7 +782,7 @@ The table below predates the §9.1 finding and came from the same capture genera
 
 **Bit 8 = "Show scroll bar: When Scrolling"** (versus the default "Always" when bit 8 is absent) — but this effect is conditional: it only appears when bit 0 (Allow Vertical Scrolling) is also set. Isolating bit 8 alone against an all-off baseline (`flags=272`) showed no effect, because the "Show scroll bar" dropdown is inactive when scrolling itself is off — the bit's effect was real but hidden behind a disabled control. Confirmed by testing `flags=273` (bits 0+8 together): the dropdown reads "When Scrolling" instead of "Always". ✓
 
-**Bits 1, 5, 6, and 9 are confirmed to have no effect.** Retested twice against the two known hiding spots from this investigation: once with scrolling and deletion active (ruling out a bit-8-style dependency on another bit), and once with Sort and Filter genuinely working and their Specify dialogs inspected directly (ruling out an effect hidden inside a sub-dialog rather than the main checkbox list). All five portals in each batch were identical throughout, including inside Sort's Specify dialog (field selection, order direction, "custom order based on value list," "reorder based on summary field," language override — all unchanged). ✓
+**Bits 1, 5, 6, and 9 have no effect.** Verified with scrolling and deletion active (ruling out a dependency on another bit), and with Sort and Filter working and their Specify dialogs inspected directly (ruling out an effect hidden in a sub-dialog). All five portals identical throughout, including field selection, order direction, custom order, reorder-by-summary and language override inside Sort's Specify dialog. ✓
 
 **Sort and filter require both the real content AND the matching bit set together — neither alone is sufficient.** A portal with genuine `SortList`/`FilterCalc` content but bits 3/7 absent from `portalFlags` comes back with "Sort/Filter portal records" unticked in Portal Setup, even though the content itself survives the round-trip intact. But a portal generated with the same real content **and** bits 3/7 explicitly included in `portalFlags` (confirmed at `flags=397`) comes back with both correctly ticked. ✓ Content-only and bit-only are each insufficient; the combination is required and is achievable by generating XML directly — no UI step needed.
 
@@ -839,7 +933,7 @@ Element order in `TabPanel`: `Bounds` → `Styles` → `TitleCalc` → `TabPanel
 </TabPanelObj>
 ```
 
-**Geometric overlap attaches nothing.** A sibling object generated at absolute coordinates inside the panel area pastes as a free-floating layout object in front of the control, not as panel content. ✓ Earlier revisions of this spec stated the sibling model as the mechanism; that was wrong — attachment is structural, not spatial.
+**Geometric overlap attaches nothing.** A sibling object generated at absolute coordinates inside the panel area pastes as a free-floating layout object in front of the control, not as panel content. ✓
 
 ### §11.1 TabControlObj attributes
 
@@ -850,7 +944,7 @@ Element order in `TabPanel`: `Bounds` → `Styles` → `TitleCalc` → `TabPanel
 | `defaultVisPanelKey` | Key of the Default Front Tab — binds from generated XML and round-trips independently of the currently visible panel ✓ |
 | `visPanelIndex` / `defaultVisPanelIndex` | 0-based indices, survive verbatim, track their respective keys ✓ |
 | `tabWidthModifier` | The stored operand for the Tab Width setting. Persists dormant in modes that do not use it (a control in Label Width mode still carries and displays the last modifier value). Read per side in Margin mode, as a floor in Minimum mode, as the exact width (+2pt, see below) in Fixed mode ✓ |
-| `tabJustification` | Does not survive round-trip. ✓ — retested with 2-panel controls at values 0/1/2: the attribute is absent entirely from every returned `TabControlObj`, and all three rendered identically (tabs left-aligned, occupying only their own width). Confirmed non-functional/non-persistent via generation; do not rely on it. |
+| `tabJustification` | Does not survive round-trip; do not generate. Values 0/1/2 on 2-panel controls all returned with the attribute absent from `TabControlObj` and all three rendered identically, tabs left-aligned at their own width. ✓ |
 | `tabFlagSet` | Encodes the Tab Width mode as an enumeration on base `264`, stepping by 16 in dialog order — see table below ✓ |
 
 ### §11.1.1 tabFlagSet — Tab Width mode enumeration
@@ -869,15 +963,15 @@ All five values round-trip verbatim, display the matching mode in Tab Control Se
 
 **Fixed Width of returns `tabWidth = modifier + 2`, confirmed as a real constant, not measurement error.** Verified twice independently: once via manual drag-to-size (150 requested → 152 returned) and once via a fully typed, drag-free generation with no manual sizing step at all (100 requested → 102 returned, all three panels identical). The +2pt is a structural border/inset allowance FM applies uniformly in Fixed mode. ✓
 
-**Generation default: `tabFlagSet="264"`** (Label Width) with any `tabWidthModifier` value, for natural tabs. This supersedes earlier guidance to use `312`, which silently produces minimum-width behaviour whenever a label happens to be narrower than the modifier — the source of the historical "no behavioural difference between 264/312" claim, now withdrawn: the difference is invisible only when every label exceeds the modifier, which was true of the earlier test corpus. Emit `312` or `328` plus a meaningful modifier only when uniform tab widths are specifically wanted.
+**Generation default: `tabFlagSet="264"`** (Label Width) with any `tabWidthModifier` value, for natural tabs. `312` silently produces minimum-width behaviour whenever a label is narrower than the modifier, and the difference is invisible when every label exceeds it. Emit `312` or `328` plus a meaningful modifier only when uniform tab widths are specifically wanted. ✓
 
-**Resolved:** `328`, previously "observed in the wild, meaning unknown," is Fixed Width of.
+`328` is Fixed Width of.
 
 ### Panel title serialisation
 
-**FM 26 exports every dialog-defined panel title as `TitleCalc`** — front and non-front panels alike, whether the name was entered by typing plainly into Tab Name or via Specify. Confirmed across every capture this session, including after explicitly renaming a panel by typing plain text into Tab Name: the title still returned as `TitleCalc`, and no panel `TextObj`/`Data` form appeared in any capture. ✓
+**FM 26 exports every dialog-defined panel title as `TitleCalc`** — front and non-front panels alike, whether the name was typed plainly into Tab Name or entered via Specify. No panel `TextObj`/`Data` form appears in any capture. ✓
 
-**Withdrawn, not reproduced:** the earlier claims that (a) a generated `TitleCalc` converts to the `TextObj > CharacterStyleVector > Style > Data` form on the next copy, and (b) FM 26 exports all panel titles as Data with bare panel `TextObj`s (no `ExtendedAttributes`, `mask="0"`). Neither behaviour appeared in any capture this cycle, on a build (26.0.1.51) identical to the one the original claims were pinned to. Treat the Data export form as historical/decode-only if encountered in archived snippets; do not generate it.
+**Never generate the `TextObj > CharacterStyleVector > Style > Data` form for a panel title.** It appears in some archived snippets and is decode-only; FM 26 does not produce it.
 
 **Dynamic titles: front panel only.** A non-literal `TitleCalc` on a NON-front panel does not survive generated paste — with `ExtendedAttributes` present throughout the batch it is silently dropped (blank tab); without, its calc source migrates into the next EA-less `TextObj` in the paste, destroying that object's label (§31). Generate dynamic titles only as quoted literals on non-front panels, or accept the loss. ✓
 
@@ -926,9 +1020,9 @@ Overriding `border-*-style: none` on `self:checked .self` and `self:checked .inn
 
 SlidePanel `Bounds` are relative to SlideControl. ✓
 
-**SlidePanel content nests INSIDE `SlidePanelObj`** — same mechanism as TabControl (§11), verified in both directions on FM 26: UI-attached content serialises as child `Object` elements inside `SlidePanelObj` with control-relative bounds, and a generated nested `Object` pastes attached and round-trips still nested with `Bounds` byte-identical. ✓ **Geometric overlap attaches nothing** — a sibling object generated at absolute coordinates over the panel area pastes free-floating, exactly as at §11. ✓ Earlier revisions stated the sibling model; that was wrong for both container types.
+**SlidePanel content nests INSIDE `SlidePanelObj`** — same mechanism as TabControl (§11), verified in both directions on FM 26: UI-attached content serialises as child `Object` elements inside `SlidePanelObj` with control-relative bounds, and a generated nested `Object` pastes attached and round-trips still nested with `Bounds` byte-identical. ✓ **Geometric overlap attaches nothing** — a sibling object generated at absolute coordinates over the panel area pastes free-floating, exactly as at §11. ✓
 
-**`slideFlagSet` bit 0 (value 1) = navigation dots HIDDEN.** A control generated with `slideFlagSet="1"` pastes with no dots; a control with dots visible exports `slideFlagSet="0"`. Generate `0` for the standard dotted control. ✓ (Earlier revisions' example used `1`, silently suppressing the dots.)
+**`slideFlagSet` bit 0 (value 1) = navigation dots HIDDEN.** A control generated with `slideFlagSet="1"` pastes with no dots; a control with dots visible exports `slideFlagSet="0"`. Generate `0` for the standard dotted control. ✓
 
 `visPanelKey`/`visPanelIndex` bind from generated XML — a control generated pointing at its second panel returns with that panel's reassigned key and `visPanelIndex` intact. ✓
 
@@ -1033,7 +1127,7 @@ Popover `Bounds` are absolute layout coordinates, but FM **recomputes them relat
 
 **The PopoverButton `TextObj` must carry `ExtendedAttributes`** — a bare `<TextObj flags="0"/>` is the §31 leak absorber: in batch testing it received a migrated TitleCalc's raw source as its label. ✓
 
-**PopoverButton label mechanism: `CharacterStyleVector > Data`, NOT `LabelCalc` — the exact inverse of ButtonBar segments (§9).** Fully verified: native FM 26 capture shows label text in `Data` in both vectors with no `LabelCalc` element anywhere; a generated single-object paste with the label in `Data` renders correctly; and the round-trip returns the `Data` verbatim in both vectors with `TitleCalc` intact. ✓ A generated `LabelCalc` is **dropped by the paste handler entirely** — confirmed empty label in both batch pastes and a single-object paste, and a later native export of that pasted button showed no `LabelCalc` element at all — because it was never the popover mechanism; earlier revisions of this spec had both halves inverted, the same error class as §9.1. Do not generate `LabelCalc` on PopoverButtons; put the label in `Data`, exactly as a Text object.
+**PopoverButton label mechanism: `CharacterStyleVector > Data`, NOT `LabelCalc` — the exact inverse of ButtonBar segments (§9).** Fully verified: native FM 26 capture shows label text in `Data` in both vectors with no `LabelCalc` element anywhere; a generated single-object paste with the label in `Data` renders correctly; and the round-trip returns the `Data` verbatim in both vectors with `TitleCalc` intact. ✓ A generated `LabelCalc` is **dropped by the paste handler entirely** — confirmed empty label in both batch pastes and a single-object paste, and a later native export of that pasted button showed no `LabelCalc` element at all. Do not generate `LabelCalc` on PopoverButtons; put the label in `Data`, exactly as a Text object.
 
 Native shape notes: PopoverButton Object `flags="8"` natively (same value as native ButtonBar segments — bit 3 appears on labelled button-family objects); generated `flags="0"` binds and round-trips as `0` ✓. `PopoverObj` carries `flags` / `position` / `key` attributes on export (artifacts; a bare `<PopoverObj/>` pastes ✓).
 
@@ -1045,14 +1139,9 @@ Element order in `Popover`: `Bounds` → `Styles` → `TitleCalc` → `PopoverOb
 
 ```xml
 <Object type="ExternalObject" key="1" LabelKey="0" name="wv1"
-        flags="0" rotation="0">
+        flags="-1073741824" rotation="0">
   <Bounds top="10" left="10" bottom="200" right="500"/>
   <ExternalObj typeID="WEBV" typeIndex="0" externalFlagSet="32865">
-    <ExtendedAttributes fontHeight="10" graphicFormat="0">
-      <NumFormat flags="0" charStyle="0" negativeStyle="0" currencySymbol=""
-                 thousandsSep="0" decimalPoint="0" negativeColor="#0"
-                 decimalDigits="0" trueString="" falseString="No"/>
-    </ExtendedAttributes>
     <Styles>
       <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
     </Styles>
@@ -1061,13 +1150,21 @@ Element order in `Popover`: `Bounds` → `Styles` → `TitleCalc` → `PopoverOb
 </Object>
 ```
 
-- `name` attribute on Object element when targeted by `Perform JavaScript in Web Viewer` ✓
-- URL or full HTML string in `Calculation index="0"` — both verified end to end: a quoted URL loads the page, a quoted `data:text/html,...` string renders the HTML, and both calculations round-trip verbatim ✓
+- `flags="-1073741824"` anchors the object on all four sides so it fills the window at any size. Required for a web viewer hosting a single-page app: generating `flags="0"` here produces a viewer pinned to left and top that renders correctly at the design size and then does not grow. For a fixed-size viewer, use `flags="0"`. See §2.2 ✓
+- **`name` on the Object element is required for any bridged viewer**, not optional. `Perform JavaScript in Web Viewer` targets by name and `GetLayoutObjectAttribute` reads by name; an unnamed viewer is unreachable in both directions ✓
+- `typeIndex` is `0` on every captured WEBV. Do not vary it ◎
+- **`ExtendedAttributes` is not required on `ExternalObj` and is not added on paste.** Generated without it, the object pastes clean and returns with no `ExtendedAttributes` element. Omit it. This is a WEBV exception to the §31 rule, which concerns `TextObj` only ✓
+- Web viewers carry a 1pt theme border on all four sides. For a full-bleed app host, suppress it per §15.2 ✓
+- URL or full HTML string in `Calculation index="0"` — both verified end to end: a quoted URL loads the page, a quoted `data:text/html,...` string renders the HTML including inline `<script>` blocks, and both calculations round-trip verbatim ✓. Size limits are a property of the snippet, not the calculation: see §15.4
+- **The Web Viewer Setup preset is not carried by the clipboard format.** Every generated web viewer opens as *Custom Web Address*, whatever the calculation contains. A native Google Maps viewer and a generated object with a byte-identical `Calculation` open on different dialog entries, so the picker does not read the calculation and the selection is stored outside the XML. It is not `typeIndex`, which is `0` in both ✓
+- The `/*Address=*/`-style comment markers that FileMaker writes into preset calculations survive verbatim but do not reconstruct the dialog's parameter slots. No reason to generate them ✓
 - Chart (`typeID="CHRT"`) not generatable
 
 ### §15.1 Web viewer option bits (`externalFlagSet`)
 
-`externalFlagSet` encodes the setup-dialog options, not an opaque constant. Decoded by single-option round-trip testing (FileMaker Pro 26, macOS). Value = 32768 (always present on WEBV) plus:
+`externalFlagSet` encodes the setup-dialog options, not an opaque constant. Decoded by single-option round-trip testing (FileMaker Pro 26, macOS).
+
+Bit 15 (32768) is present on every WEBV object authored in FileMaker 26. It is **not universal** across older files; see the legacy note below. The option bits are:
 
 | Add | Option / state |
 |---|---|
@@ -1078,12 +1175,95 @@ Element order in `Popover`: `Bounds` → `Styles` → `TitleCalc` → `PopoverOb
 | +32 | Automatically encode URL — **OFF** (inverted: ON adds nothing) |
 | +64 | Allow JavaScript to perform FileMaker scripts — ON |
 
+Verified in the generation direction: an object generated with `32781` opened in Web Viewer Setup showing exactly the predicted six states. ✓
+
 Confirmed whole values: dialog defaults = `32781`; integrated HTML UI (interaction + JS bridge ON, encode OFF, rest off) = **`32865`**; everything ON = `32847`; JS bridge only = `32864`. ✓
 
+**Analysis rule: read the low bits independently, treat bit 15 as a separate marker.** Objects authored before FM 26 omit it: `externalFlagSet="13"` (bits 0, 2, 3) is the same option set as the FM 26 default `32781` without it. Never decode as `value - 32768`; on a legacy object that goes negative and misreports every option. ✓
+
+**Progress bar and status messages consume the object's height.** `+4` and `+8` draw a progress bar across the top and a status bar along the bottom, and the chrome is a fixed pixel height regardless of object size. On a short web viewer it swallows the content area entirely: at 46pt tall, thirteen viewers at `32781` rendered no page content at all while an identical viewer at `32865` rendered normally. The page loads in every case; there is nowhere to draw it. Only network-loading URLs show the chrome, so a `data:` URL renders regardless. ✓
+
+Generation rule: omit `+4` and `+8` on any small web viewer. The exact height at which the chrome stops mattering was not established; 46pt is confirmed unusable. For a viewer hosting an app UI, omit them at any size.
+
 Generation notes:
-- `32865` is the correct configuration for a web viewer hosting an integrated HTML UI. **If the +64 bit is absent, `FileMaker.PerformScript()` fails silently** — the page loads normally and the object is simply undefined inside the viewer; nothing errors on the FileMaker side.
+- `32865` is the correct configuration for a web viewer hosting an integrated HTML UI, and carries neither `+4` nor `+8`.
+- **`+64` gates delivery, not the object's existence.** The `FileMaker` object is present and callable in the page whether or not the bit is set. Without `+64`, `FileMaker.PerformScript()` returns normally, throws nothing, and the call never reaches FileMaker. With it, the call arrives (verified: a call to a non-existent script raised FileMaker's own "This script cannot be found" dialog, while the identical page at `32801` produced nothing at all). ✓
+
+  Debugging consequence: testing `typeof FileMaker` proves nothing. It is defined in both cases. The only reliable check is whether FileMaker actually receives the call.
 - For plain URL-display web viewers, generate the dialog default `32781` — shipping the bridge enabled on a viewer rendering arbitrary web content is an unnecessary surface.
 - "Automatically encode URL" is inverted (+32 = off). HTML delivered via a data: URL calculation should keep encoding OFF (+32); plain web URLs normally keep it ON (no bit).
+
+---
+
+### §15.2 Border suppression
+
+Web viewers inherit a 1pt solid border on all four sides from the theme. Removing it is a `LocalCSS` override on `border-*-style` only.
+
+- **Set style, never width or colour.** FileMaker retains `border-*-width: 1pt` and the theme border colour in `FullCSS` regardless; both are inert once style is `none`. Emitting width or colour to remove a border is wrong shape and unnecessary. ✓
+- **Emit all four sides whenever any side differs from the theme**, including sides that keep `solid`. A single-side override still writes the complete four-side group. ✓
+- **Emit `self:normal .self` only.** FileMaker's own export adds a `self:normal .inner_border` block on the all-off case, but a generated one is pruned as redundant against the theme (§25.3 delta-pruning) and the result is identical without it. ✓
+- **No focus-state override is required.** The computed `self:focus .self` block carries border colour only, never style, so with normal style at `none` there is nothing for it to colour. ○ (structural; visual confirmation outstanding)
+
+Full-bleed app host. `FullCSS` is omitted because FileMaker recomputes it on paste (§4, §25.2). Round-trip verified from generation ✓:
+
+```xml
+<Styles>
+  <LocalCSS>
+self:normal .self
+{
+	border-top-style: none;
+	border-right-style: none;
+	border-bottom-style: none;
+	border-left-style: none;
+}
+</LocalCSS>
+  <ThemeName>com.filemaker.theme.apex_blue</ThemeName>
+</Styles>
+```
+
+A named theme style is the cleaner route where one exists: it can zero `border-*-width` and clear `border-*-color` as well as style, and carry its own `focus` and `hover` handling. See §25.3.
+
+Single edge only, here a left rule. All four sides listed, the wanted edge `solid`, no `.inner_border` block:
+
+```xml
+<LocalCSS>
+self:normal .self
+{
+	border-top-style: none;
+	border-right-style: none;
+	border-bottom-style: none;
+	border-left-style: solid;
+}
+</LocalCSS>
+```
+
+---
+
+### §15.3 Behavioural elements and containers on WEBV
+
+FileMaker Pro 26, macOS. Confidence differs by row; read the marks.
+
+| Element | On `ExternalObject` |
+|---|---|
+| `ConditionalFormatting` | Applies and renders. A true condition with a `background-color` override fills the object, visually confirmed ✓ |
+| `ExtendedAttributes` | Not required, not added on paste; omit (§4) ✓ |
+| `HideCondition` | Pastes and does not wrongly hide with a false calc. Whether a true calc actually hides the object is untested ○ |
+| `ToolTip` | Pastes without error. Neither round-trip survival nor display confirmed ○ |
+| `ScriptTriggers` | Pastes without error. Neither round-trip survival nor firing confirmed ○ |
+
+`LocalCSS` on a web viewer is not limited to borders. `background-color`, all four `border-*-radius` corners, and `box-shadow` all apply and render, visually confirmed ✓. The `hover` state is populated on WEBV, so `self:hover .self` is available (§25.4), though the hover transition itself was not observed ◎.
+
+**Containers.** A web viewer nests and pastes attached inside `TabPanelObj`, `PopoverObj` and `SlidePanelObj`, with `Bounds` relative to the container origin exactly as for other object types (§11, §12, §14) ✓ (visually confirmed attached; the return trip was not captured ◎). A single paste containing web viewers inside all three container types alongside fourteen `TextObj`-bearing objects left the trailing Text canary intact and alone, so `ExternalObject` does not trigger the §31 accumulator ✓.
+
+### §15.4 Calculation size and the snippet ceiling
+
+There is **no practical per-calculation length limit**. A single `Calculation` of 60,000 characters round-trips intact, with markup-heavy or plain content alike ✓.
+
+**The constraint is total snippet size.** Above roughly 150 KB, FileMaker pastes every object and silently discards the `Calculation` element from each one. The objects arrive with correct names, bounds and styling, and display nothing. Verified good at 50 KB, 112 KB, 135 KB and 142 KB; verified failing at 516 KB. The threshold was not narrowed further because the behaviour looks like a resource ceiling rather than a designed cap, so a precise figure would not travel between machines or versions.
+
+Generation rule: keep a snippet under about 150 KB. For a large inline payload, split the paste, or deliver the HTML through `Configure Persistent Data` and `Set Web Viewer` (FileMaker 26) rather than inlining it as a `data:` URL.
+
+**Layout saturation.** A layout carrying several dozen live web viewers stops rendering page content in all of them; object-level styling still renders. Not a paste failure, and not quantified. Build web viewer test layouts fresh ◎
 
 ---
 
@@ -1224,7 +1404,7 @@ The event vocabulary is object-type dependent. A field carries the enter/exit/mo
 
 `triggerFlags="1"` on all observed instances — meaning unknown, include as-is. ✓
 `<Script id name>` reference binds by internal id. It reconnects only if that script id exists in the destination file — pasting into a file without the script leaves the trigger present but pointing at nothing. This is reference rebinding, not a survival failure. ✓
-`<TriggerText>` is **derived output, not preserved input**: FM regenerates it on export from the script reference, quote-wrapping the current script name. Verified by generating one trigger with `TriggerText` quoted and one bare in the same paste — with the referenced script id unresolved, both returned identically as `"<unknown>"` (quote-wrapped), i.e. the generated content is discarded and rewritten. The earlier `beee` → `"beee"` capture fits the same rule. When generating, the `TriggerText` content is immaterial; the `<Script id name>` reference is what binds. ✓
+`<TriggerText>` is **derived output, not preserved input**: FM regenerates it on export from the script reference, quote-wrapping the current script name. Verified by generating one trigger with `TriggerText` quoted and one bare in the same paste: with the referenced script id unresolved, both returned identically as `"<unknown>"` (quote-wrapped), so the generated content is discarded and rewritten. When generating, the `TriggerText` content is immaterial; the `<Script id name>` reference is what binds. ✓
 Multiple `<Trigger>` elements stack inside one `<ScriptTriggers>` block, in event-id order. ✓
 `OnPanelSwitch` also binds when generated on a **SlideControl** (survives round-trip; dangles to `<Script id="0" name="&lt;unknown&gt;"/>` when the id is absent). ✓
 
@@ -1370,7 +1550,7 @@ For container types (ButtonBar, TabControl, Portal, PopoverButton, SlideControl,
 
 ## §22 Step reference
 
-
+```xml
 <Step enable="True" id="1" name="Perform Script">
   <CurrentScript value="Pause"/>
   <Script id="257" name="ScriptName"/>
@@ -1449,11 +1629,14 @@ Round-trip behaviour of button steps (FM Pro 26):
 - Unknown `ThemeName` — FM substitutes the file's default theme, both at render and in the returned XML (no poisoned identifier survives onward) ✓
 - Invalid calculation inside a calc element (confirmed for `LabelCalc`) — comment-neutralised to `/*…*/`, object pastes, calc inert, nothing errors (§19.2) ✓
 - Dynamic (non-literal) `TitleCalc` on a non-front tab panel — dropped when every batch `TextObj` carries `ExtendedAttributes`; migrated into the next EA-less `TextObj` otherwise (§11, §31) ✓
-- Web viewer generated without the +64 `externalFlagSet` bit — `FileMaker.PerformScript` is undefined in the page, no error anywhere (§15.1) ✓
+- Web viewer generated without the +64 `externalFlagSet` bit — `FileMaker.PerformScript()` is defined, returns normally and throws nothing, but the call never reaches FileMaker; no error on either side (§15.1) ✓
+- Snippet larger than roughly 150 KB — every `Calculation` element is dropped from the paste while the objects themselves arrive intact, correctly named and styled, showing nothing (§15.3) ✓
 - Button/segment-level LocalCSS placed in an object-level `Styles` block instead of `TextObj > Styles` — pastes without error, produces no visual effect, absent from the returned XML entirely (§8) ✓
 - `.text` selector overrides on Text objects (as opposed to Field objects) — survive, merge into `FullCSS`, produce no visible effect (§20) ✓
 - `.button_bar_divider` and `.inner_border` styled with non-border properties, or with the `border:` shorthand — survive-or-vanish with no visible effect (§20) ✓
 - Value-comparison Conditional Formatting items (`op` 1–8) with an unmaterialised `Calculation` — the Format dialog shows a fully correct, ticked condition; only a Browse-mode behaviour check reveals it never evaluates correctly. Undetectable by structural audit or by opening the dialog (§16.3) ✓
+- `CustomStyles > Name` referencing a style absent from the destination theme — the object pastes, renders its base appearance, and returns with no `CustomStyles` block at all; nothing errors (§25.3) ✓
+- Web viewer generated with `+4`/`+8` (`externalFlagSet` `32781`) at a small object size — progress bar and status chrome consume the full height, the page loads but nothing is visible (§15.1) ✓
 - A single selected Text object copying to the system clipboard as plain text instead of layout XML — no error shown, affects any single-object capture workflow (§0) ✓
 
 ---
@@ -1470,9 +1653,12 @@ portalFlags:      "21" (scrollbar, no sort, no filter)
 initialRow:       "1"
 ThemeName:        match the target file's theme
 externalFlagSet:  "32865" (WebViewer, bridge-enabled — see §15.1 for the bit table; use "32781" for plain URL display)
+Anchoring:        "0" = left+top (default). "-1073741824" = all four (full-bleed). See §2.2
 ```
 
-Do not generate Object flags bits 14, 16, 24, 28, 30, 31 — FM sets these from object state.
+Do not generate Object flags bits 0, 2, 3, 8, 9, 12, 13, 14, 16, 24 or 25. FileMaker sets them from object state, or they do not exist (§2.1).
+
+Bits 28 to 31 are the exception: they are object anchoring and **should** be generated when an object must resize with the window. `flags="0"` is left and top anchored, the FileMaker default. Use `-1073741824` for a full-bleed object. Full table in §2.2.
 
 **Always include `ExtendedAttributes` on generated `TextObj`s** (Text and Button objects) — see §31. This is the one exception to the "omit round-trip artifacts" guidance in §4; leaving it out is the root cause of multi-object paste corruption.
 
@@ -1487,7 +1673,7 @@ This is the core of how a styled object is written out. It is **theme-independen
 Inside `<Styles>`, an object carries up to three CSS blocks plus the theme name:
 
 - **`<LocalCSS>`** — the *changed-property delta only*, grouped by state. Present when the object overrides its theme defaults.
-- **`<CustomStyles><Name>…</Name></CustomStyles>** — a reference to a named theme style. The `Name` is the style's internal `FM-`UUID (e.g. `FM-11711CFC-75AA-486A-B945-C847FEF44E34`), NOT its display name. A style shown as "fred" in the theme is stored as a UUID; the display name is only a label. The reference is a pointer: the style's actual appearance lives in the theme keyed by that id, not in the `CustomStyles` block. ✓
+- **`<CustomStyles><Name>…</Name></CustomStyles>** — a reference to a named theme style. `Name` carries the style's identifier as the theme stores it. **User-created styles are keyed by their display name** and bind from that name alone. Stock-theme styles may instead carry an `FM-`UUID (e.g. `FM-11711CFC-75AA-486A-B945-C847FEF44E34`); use whichever form the theme holds. Either way the reference is a pointer: the style's appearance lives in the theme, not in the `CustomStyles` block. ✓
 - **`<FullCSS>`** — the *full computed merge*: every property, the complete resolved appearance. FileMaker ALWAYS recomputes this from the destination theme on paste.
 - **`<ThemeName>`** — closes the `Styles` block.
 
@@ -1500,15 +1686,19 @@ Inside `<Styles>`, an object carries up to three CSS blocks plus the theme name:
 | Named style applied | `CustomStyles`, `FullCSS`, `ThemeName` |
 | Named style + local override | `LocalCSS`, `CustomStyles`, `FullCSS`, `ThemeName` |
 
-The two `CustomStyles` cases are generatable: emit the style's `FM-`UUID in `<CustomStyles><Name>` and it binds on paste (see §25.3). The id must be a real style id from the target theme, not a display name.
+The two `CustomStyles` cases are generatable: emit the style's identifier in `<CustomStyles><Name>` and it binds on paste (see §25.3). The identifier must exist in the target theme.
 
 ### §25.3 Generation rule
 
 When generating, emit a minimal `FullCSS` (the handful of properties you care about) plus `ThemeName`. **FileMaker recomputes `FullCSS` from the destination theme's tokens on paste**, expanding a minimal block to the full baseline. For deliberate overrides, also emit a `LocalCSS` delta containing only the changed properties grouped under the relevant `self:STATE .selector` heading. Do not hand-write the full baseline — let FileMaker compute it.
 
-**Applying a named style by generation works, by id. ✓** Emit `<CustomStyles><Name>FM-...UUID...</Name></CustomStyles>` carrying the style's real internal id, plus a minimal `FullCSS`, and on paste the object binds to that style and renders it. The binding survives a subsequent copy (the `CustomStyles` id comes back intact). A display name does NOT work — `<Name>fred</Name>` has nothing to bind to and the object falls back to its base appearance; the id is everything.
+**Applying a named style by generation works. ✓** Emit `<CustomStyles><Name>STYLE-NAME</Name></CustomStyles>` plus `ThemeName`, and on paste the object binds to that style and renders it. The binding survives a subsequent copy. Verified end to end on WebViewer objects: two user-created styles generated from their display names alone, no exemplar object, both bound and returned their real computed appearance.
 
-The constraint is sourcing the id. A style's `FM-`UUID lives in the theme, not in any catalogue the clipboard format exposes. You can only obtain it from an object that already carries the style: one the user supplies as an exemplar, or one present in a copied set. There is no way to derive a style's id from its display name through this format. To give an object a named style's *look* without its id, reproduce the appearance as a `LocalCSS` override instead — visually equivalent, but not linked to the style, so it will not track later edits to it.
+**Scope.** Verified on `ExternalObject`. `Styles` is a shared block across object types, so the mechanism is expected to hold generally, but binding by display name has not been captured on Field, Text or Button objects, and whether a theme style is scoped to the object type it was created on is untested. ◎
+
+**Ask the user for the style name.** For user-created styles the display name shown in the theme is the identifier, so a name is all a generator needs. Stock-theme styles may use an `FM-`UUID instead; that form can only be sourced from an object that already carries the style, since no catalogue of theme styles is exposed through the clipboard format.
+
+**A `CustomStyles` name that does not exist in the target theme is dropped silently** (§23). The object pastes, renders its base appearance, and returns with no `CustomStyles` block at all. Nothing errors. This is also what an identifier from a different file looks like, so verify the style exists in the destination before relying on it.
 
 **Delta-pruning on return.** FM prunes generated `LocalCSS` declarations that are redundant against the active theme's computed value before returning them on copy. Confirmed on a ButtonBar divider: a generated `border-*-style: solid` (matching the theme's own default divider style) was silently dropped from the returned `LocalCSS`, while the non-default `border-*-color` and `border-*-width` in the same block survived. This is not a failure — the declaration still applied at paste time — it is evidence that `LocalCSS` is stored/returned as a true delta against the theme, not as a literal echo of what was generated. When auditing round-trip fidelity, judge by rendered effect, not by byte-identical `LocalCSS` content. ✓
 
@@ -1523,12 +1713,12 @@ The constraint is sourcing the id. A style's `FM-`UUID lives in the theme, not i
 
 ### §25.6 Retheming objects to a named style
 
-Because a named style applies by id (§25.3), an object's style can be reassigned by rewriting its `<CustomStyles><Name>` to a different style's id, and an overridden object can be put onto a style by removing its `<LocalCSS>` and inserting a `<CustomStyles>` id. Verified end to end: a set of fields each carrying a `font-size` `LocalCSS` override, restyled by stripping the override and adding a style id, pasted clean and on-style. ✓
+Because a named style applies by identifier (§25.3), an object's style can be reassigned by rewriting its `<CustomStyles><Name>`, and an overridden object can be put onto a style by removing its `<LocalCSS>` and inserting a `<CustomStyles>` name. Verified end to end: a set of fields each carrying a `font-size` `LocalCSS` override, restyled by stripping the override and adding a style id, pasted clean and on-style. ✓
 
 Method:
 1. Identify the target objects. "Overridden" objects are those with a `<LocalCSS>` block (the local-override and named-style-plus-override cases of §25.2).
-2. For each, drop the `<LocalCSS>` block and replace the `<Styles>` contents with `<CustomStyles><Name>STYLE-ID</Name></CustomStyles>`, a minimal `<FullCSS>`, and the `<ThemeName>`.
-3. The `STYLE-ID` must be sourced from an object that already carries the style (an exemplar, or another object in the copied set) — see §25.3.
+2. For each, drop the `<LocalCSS>` block and replace the `<Styles>` contents with `<CustomStyles><Name>STYLE-NAME</Name></CustomStyles>` and the `<ThemeName>`.
+3. For a user-created style the display name is the identifier. For a stock-theme style carrying an `FM-`UUID, source it from an object that already has the style — see §25.3.
 
 Paste workflow (matters — these are paste mechanics, not XML):
 - **Emit only the objects being restyled.** A retheme snippet pasted onto a layout that still contains the originals merges with them; text objects in particular concatenate their content. Delete the originals, then paste the replacements.
@@ -1601,7 +1791,7 @@ FileMaker 2026 added calculation-driven control over object access states. The f
 
 ---
 
-## §28 Theme independence (proven across two themes)
+## §28 Theme independence
 
 The serialization structure in §25–§27 is identical across themes. Verified by building the same objects under stock `apex_blue` and a custom minimalist theme: same element shapes, same ordering, same selector set, same property list, same `LocalCSS`/`FullCSS` model. Only the values move. ✓
 
@@ -1648,12 +1838,7 @@ This spec covers the object-level clipboard format (`fmxmlsnippet type="LayoutOb
 
 ### §30.1 Not yet verified
 
-### §30.1 Resolved this session
-
-Both items previously listed here are now closed:
-
-- **2026 calc-driven access states beyond `CanEntryCalc`:** a full sweep of the Field entry-behavior dialog (all four access states, both Browse and Find modes) found no new tag. `CanEntryCalc` is confirmed as the sole calc-driven access mechanism; see §27 and §5.2.1 for the full bit decode.
-- **CF `op=8` dialog rendering:** confirmed both structurally and at the dialog — see §16.3 for the full value-op decode, including the runtime trap this uncovered (dialog-correct items with an unmaterialised `Calculation` never actually evaluate).
+- `TextObj flags="2"` observed on a single Text object where every sibling in the same paste carried `0`. Sits on the inner element, not `Object`, so unrelated to anchoring. Not yet reproduced against a known Inspector setting. ○
 
 ---
 
@@ -1706,27 +1891,25 @@ Pasting two or more Text objects in one operation without an `ExtendedAttributes
 
 The `ExtendedAttributes > CharacterStyle` values should mirror the object's own `CharacterStyleVector > Style > CharacterStyle` values. `NumFormat`/`DateFormat`/`TimeFormat` can stay at the placeholder defaults shown — they don't need to be meaningful for a Text object, only present.
 
-### §31.1 Scope: confirmed fixed, and what's still pending confirmation
+### §31.1 Scope
 
-**Confirmed fixed with `ExtendedAttributes` on every `TextObj`:** standalone `Text` objects (n=2, n=3), `Button` objects, `ButtonBar` segments, and `GroupButton` child Texts — all clean in large mixed batches (16 and 15 top-level objects, FM Pro 26). ✓
+**Covered by `ExtendedAttributes` on every `TextObj`:** standalone `Text` objects (n=2, n=3), `Button` objects, `ButtonBar` segments, and `GroupButton` child Texts — all clean in large mixed batches (16 and 15 top-level objects, FM Pro 26). ✓
 
 **Confirmed participants beyond `TextObj` labels:**
 - **Dynamic (non-literal) `TitleCalc` on a non-front `TabPanel`** feeds the accumulator: without EA downstream its calc source migrates into the next EA-less `TextObj` (observed landing on a PopoverButton, destroying its label); with EA everywhere it is silently dropped instead. Generate dynamic titles only as quoted literals on non-front panels (§11). ✓
 - **PopoverButton `TextObj`s must carry `ExtendedAttributes`** — a bare `<TextObj flags="0"/>` was the leak absorber in testing. ✓
 
-**Resolved — fields carrying `PlaceholderText` (§5.6):** the placeholder's `Calculation` feeds the accumulator, but the standing sink-side fix covers it — with `ExtendedAttributes` on every `TextObj`, multiple placeholder fields batch freely (verified n=2 with full round-trip and n=4 interleaved with Texts and a Button). `ExtendedAttributes` on the `FieldObj` is inert for this purpose (controlled run, bare FieldObjs, equally clean), and the placeholder source survives rather than being silently dropped, unlike `TitleCalc`. The one-per-paste restriction is withdrawn. ✓
+- **Fields carrying `PlaceholderText` (§5.6)** feed the accumulator via the placeholder's `Calculation`, and are covered by the same sink-side fix: with `ExtendedAttributes` on every `TextObj`, multiple placeholder fields batch freely (n=2 round-tripped, n=4 interleaved with Texts and a Button). `ExtendedAttributes` on the `FieldObj` is inert for this purpose. The placeholder source survives rather than being dropped, unlike `TitleCalc`. No per-paste limit applies. ✓
 
-### §31.2 What was ruled out before the real cause was found
+### §31.2 Scope of the fix
 
-For the record, since these were tested and matter if `ExtendedAttributes` ever turns out to be insufficient in some case: `CharacterStyle mask` value, font/size/colour/`Face`, and spatial distance between objects were all varied and none of them prevented the corruption on their own. ✓ Native-origin XML (hand-typed, or hand-typed-then-edited-with-a-tool) was also unaffected regardless of `ExtendedAttributes` — which in hindsight was the clue, since native exports always carry that block and generated XML didn't.
+`ExtendedAttributes` is the only variable that prevents the corruption. `CharacterStyle mask`, font, size, colour, `Face`, and spatial distance between objects make no difference on their own. ✓
 
-### §31.3 Container-type findings — retested, resolved
+`ExtendedAttributes` on every internal `TextObj` covers all container cases, including the worst sequence found: a three-segment `ButtonBar` immediately followed by a `GroupButton` with a Text child. `TabControl` panel titles are `TitleCalc`-based rather than `TextObj` and are unaffected either way. ✓
 
-Pre-fix probing (no `ExtendedAttributes` anywhere) showed: `ButtonBar` segments did not accumulate against each other but left a residue that contaminated a subsequent `GroupButton`; `GroupButton` children accumulated normally; `TabControl` panel titles (`TitleCalc`-based, not `TextObj`) were unaffected.
+### §31.3 Generation rule
 
-**Retested with `ExtendedAttributes` on every internal `TextObj`:** the exact failing sequence (three-segment `ButtonBar` immediately followed by a `GroupButton` with a Text child, trailing Text canary) came back clean — GroupButton child text verbatim, no residue, segments clean against each other, canary clean. The residue effect is covered by the standing §31 fix. ✓ (Segment *rendering* in that run was a separate finding — see §9.1.)
+Include `ExtendedAttributes` on every generated `TextObj` — Text, Button, ButtonBar segments, GroupButton children, and PopoverButtons — even when only one is being pasted; it costs nothing and removes the risk. Mixed batches of all of these are confirmed clean with the block present, and the rule also covers `PlaceholderText` fields, which need nothing extra and batch freely (§5.6). ✓
 
-### §31.4 Generation rule
-
-Include `ExtendedAttributes` on every generated `TextObj` — Text, Button, ButtonBar segments, GroupButton children, and PopoverButtons — even when only one is being pasted; it costs nothing and removes the risk. Batches of all of these together are confirmed clean with the block present, and the rule also covers `PlaceholderText` fields — they need nothing extra and batch freely (§5.6). ✓
+Confirmed at scale: 14 `TextObj`-bearing objects interleaved with 13 WebViewers in a single paste, all clean. `ExternalObject` does not participate in the accumulator in either direction. ✓
 
