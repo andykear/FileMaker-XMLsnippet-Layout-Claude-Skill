@@ -13,11 +13,12 @@ Most rules below concern silent failures: the XML pastes without error and is wr
 
 ## Pre-flight: theme identification (mandatory)
 
-Every object must carry the target layout's `<ThemeName>` verbatim. The wrong identifier causes text doubling and CSS class names rendering as visible text.
+Every object must carry the target layout's `<ThemeName>` verbatim. The wrong identifier causes text doubling and CSS class names rendering as visible text, or fails silently: FM substitutes the destination theme and rebuilds the object from `FullCSS`, discarding `LocalCSS` and leaving `CustomStyles` unbound (§25.3).
 
 1. If the user supplied any layout XML, clipboard export or Save as XML, extract it: `grep -m1 "ThemeName" file.xml`
 2. If not, ask before generating. The user gets it by copying any object from the target layout and pasting into a text editor.
 3. Never default to `com.filemaker.theme.apex_blue`. It is a placeholder in the examples only.
+4. If the theme itself was pasted as part of the workflow, FileMaker assigned it a fresh custom-theme UUID at paste time. Capture `ThemeName` from a copy made after the paste, never from the theme XML that was pasted (§28.1).
 
 Ask first. Do not generate and then ask.
 
@@ -60,6 +61,10 @@ Above roughly 150 KB, FileMaker pastes every object and silently discards every 
 ## Named theme styles apply by name
 
 `<CustomStyles><Name>STYLE-NAME</Name></CustomStyles>` plus `ThemeName` binds a user-created theme style, no exemplar object needed. Ask the user for the style name. A name absent from the target theme is dropped silently and the object falls back to base appearance (§25.3).
+
+## Write integer CSS lengths without a decimal point
+
+A `LocalCSS` length written `1.0pt` is dropped at paste; `1pt` and `1.5pt` survive. Per declaration and silent: a border generated at `1.0pt` keeps style and colour, width falls to `0pt`, nothing draws. Serialise lengths `%g` style (§26.2).
 
 ## Scope
 
