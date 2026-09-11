@@ -12,7 +12,7 @@ Paste-ready FileMaker layout object XML (`fmxmlsnippet type="LayoutObjectList"`)
 
 ## §0 Pre-flight: theme identification
 
-**Every object's `<ThemeName>` element must match the target layout's theme exactly.** Using the wrong theme identifier causes text doubling and CSS class names to render as visible text on paste.
+**Every object's `<ThemeName>` element must match the target layout's theme exactly.** Using the wrong theme identifier causes text doubling and CSS class names to render as visible text on paste. A mismatch can also fail entirely silently: FM substitutes the destination theme and rebuilds the object from its `FullCSS`, discarding supplied `LocalCSS` and leaving `CustomStyles` unbound (§23, §25.3).
 
 ### Finding the correct ThemeName
 
@@ -40,6 +40,7 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 - If no file is provided, ask for the identifier before generating — not after.
 - Never default to `com.filemaker.theme.apex_blue` unless confirmed. It is a placeholder in the examples only.
 - Use the extracted identifier verbatim in every `<ThemeName>` element throughout the generated XML.
+- If the workflow pasted the theme itself (a generated theme, clipboard type `XMTH`), take `ThemeName` from a copy made **after** the paste: copy the theme back out of Manage Themes, or copy any object from a layout that uses it. FileMaker mints a fresh custom-theme UUID at theme paste time, so the id inside the theme XML that was pasted no longer exists in the file (§28.1). ✓
 
 ### Clipboard behaviour: single-object copy
 
@@ -1626,7 +1627,7 @@ Round-trip behaviour of button steps (FM Pro 26):
 - `type="FMObjectList"` instead of `"LayoutObjectList"` — entire paste dropped silently ✓
 - Tabs instead of spaces — elements dropped silently ✓
 - Missing required Step children — step parameters dropped silently ✓
-- Unknown `ThemeName` — FM substitutes the file's default theme, both at render and in the returned XML (no poisoned identifier survives onward) ✓
+- Unknown `ThemeName` — FM substitutes the destination theme, both at render and in the returned XML (no poisoned identifier survives onward). The object arrives rebuilt from its `FullCSS` as default style plus overrides: supplied `LocalCSS` is discarded wholesale and `CustomStyles` references do not bind (§25.3, §28.1) ✓
 - Invalid calculation inside a calc element (confirmed for `LabelCalc`) — comment-neutralised to `/*…*/`, object pastes, calc inert, nothing errors (§19.2) ✓
 - Dynamic (non-literal) `TitleCalc` on a non-front tab panel — dropped when every batch `TextObj` carries `ExtendedAttributes`; migrated into the next EA-less `TextObj` otherwise (§11, §31) ✓
 - Web viewer generated without the +64 `externalFlagSet` bit — `FileMaker.PerformScript()` is defined, returns normally and throws nothing, but the call never reaches FileMaker; no error on either side (§15.1) ✓
@@ -1638,6 +1639,7 @@ Round-trip behaviour of button steps (FM Pro 26):
 - `CustomStyles > Name` referencing a style absent from the destination theme — the object pastes, renders its base appearance, and returns with no `CustomStyles` block at all; nothing errors (§25.3) ✓
 - Web viewer generated with `+4`/`+8` (`externalFlagSet` `32781`) at a small object size — progress bar and status chrome consume the full height, the page loads but nothing is visible (§15.1) ✓
 - A single selected Text object copying to the system clipboard as plain text instead of layout XML — no error shown, affects any single-object capture workflow (§0) ✓
+- An integer `LocalCSS` length written with a decimal point (`border-top-width: 1.0pt`) — that one declaration is dropped at paste while its siblings survive; the border keeps style and colour, width falls to `0pt`, nothing draws, nothing errors. `1pt` and `1.5pt` are kept (§26.2) ✓
 
 ---
 
@@ -1702,6 +1704,8 @@ When generating, emit a minimal `FullCSS` (the handful of properties you care ab
 
 **Delta-pruning on return.** FM prunes generated `LocalCSS` declarations that are redundant against the active theme's computed value before returning them on copy. Confirmed on a ButtonBar divider: a generated `border-*-style: solid` (matching the theme's own default divider style) was silently dropped from the returned `LocalCSS`, while the non-default `border-*-color` and `border-*-width` in the same block survived. This is not a failure — the declaration still applied at paste time — it is evidence that `LocalCSS` is stored/returned as a true delta against the theme, not as a literal echo of what was generated. When auditing round-trip fidelity, judge by rendered effect, not by byte-identical `LocalCSS` content. ✓
 
+**A mismatched `ThemeName` rebuilds the object from `FullCSS`.** When the supplied `ThemeName` does not exist in the destination file, FM substitutes the destination theme (§23) and reconstructs the object as default style plus overrides sourced from the supplied `FullCSS`: every supplied `LocalCSS` declaration is discarded, `CustomStyles` references do not bind, and the returned `LocalCSS` carries lines synthesised from `FullCSS` content instead. Observed: three Text objects carrying another file's theme id and twelve generated border declarations returned with all twelve gone and a single `font-family` line the generator never wrote, lifted from `FullCSS`. The same objects with the destination's own id round-trip `LocalCSS` as written. Two consequences: the minimal-`FullCSS` rule above also bounds the damage on a theme mismatch, and `LocalCSS` fidelity on copy-back is a cheap theme-match check. Reported and measured by Hiromine Fujita (issue #2; FM Pro 26.0.2, macOS). Round-trip confirmed first party with a designed control: identical payloads carrying disjoint markers (borders only in `LocalCSS`, font-size and colour only in `FullCSS`) pasted under a bogus id and under the destination's own id. Bogus arm: borders gone, the `FullCSS` markers returned as the object's `LocalCSS`. Control arm: `LocalCSS` returned verbatim, supplied `FullCSS` discarded and recomputed from the theme, markers absent everywhere — direct evidence for §25.1's always-recomputed rule in the matched case, and the rebuild bounded to the mismatch case (FM Pro 26.0.2, macOS, Sept 2026). ✓
+
 ### §25.4 State vocabulary
 
 `normal`, `hover`, `pressed`, `focus`, `checked`, `checkedfocus`, `placeholder`, `droptarget`. Each appears as a `self:STATE .selector { … }` block. Which states a theme actually populates is theme-dependent — a minimal theme may emit only `normal`, `focus`, and `placeholder` for a field, while a richer theme adds `hover` and `droptarget`. The vocabulary is universal; the populated subset is not. ✓
@@ -1761,6 +1765,10 @@ Notes:
 
 All round-trip verified in `LocalCSS`: per-side border colour/width/style, dashed/dotted, arbitrary radius; `box-shadow`; radial/linear/multi-stop gradients; multi-state stacks; `text-align`; `-fm-text-vertical-align`; `font-style: italic`; `text-transform` uppercase/lowercase/capitalize; `font-variant: small-caps`; `font-stretch` condensed/expanded; `-fm-underline` underline/double-underline; `-fm-strikethrough`; `-fm-glyph-variant` superscript/subscript; `-fm-highlight-color`; `line-height`; `font-size`; `color`; `direction: rtl`; `-fm-tategaki`; `-fm-fill-effect`; `-fm-borders-baseline`. ✓
 
+### §26.2 Length value formatting
+
+**Write integer lengths without a decimal point.** A `LocalCSS` length serialised as `1.0pt` is dropped at paste time; `1pt` and `1.5pt` survive. The drop is per declaration and silent: sibling declarations in the same block are kept, so a border generated with `1.0pt` widths arrives with style and colour, width `0pt`, and draws nothing (§23). Measured on `border-*-width`, all four sides, Text objects: a 372-object batch generated at `1.0pt` came back with every width line missing; regenerated with `%g` formatting (`1pt`, `2pt`, `1.5pt`), all 372 returned intact. Not §25.3 delta pruning — the theme baseline for those objects was `0pt`/`none`, so the dropped value was not redundant and the rendered result changed. Serialise lengths `%g` style. Reported and measured by Hiromine Fujita (issue #1; FM Pro 26.0.2, macOS). Round-trip confirmed first party on a second file and theme: three-object probe, the `1.0pt` object returned minus all four width lines with colour and style intact, `1pt` and `1.5pt` returned verbatim (FM Pro 26.0.2, macOS, Sept 2026). ✓
+
 ---
 
 ## §27 FileMaker 2026: access-by-calculation (CanEntryCalc)
@@ -1807,6 +1815,8 @@ What is theme-specific (recomputed from the destination theme on paste):
 - **Custom theme:** `com.filemaker.theme.custom.{UUID}` — e.g. `com.filemaker.theme.custom.AE789D5E_9720_433C_B2B0_498EB8D684D4`
 
 Saving a change to a stock theme forks it into a custom theme with a UUID-suffixed id under the `.custom.` namespace. Renaming the theme is cosmetic (display name only); the internal id stays the UUID. Generated objects must carry the exact destination `ThemeName` id verbatim, or the paste will not bind to the right theme. ✓
+
+**Pasting a theme mints a new id.** A theme pasted into Manage Themes (clipboard type `XMTH`) keeps its style ids (`FM-` UUIDs), style names and CSS, but FileMaker replaces the theme's `internalName` with a fresh `com.filemaker.theme.custom.{UUID}`: four successive pastes of the same theme XML came back under four distinct ids. This is a third id behaviour beside the fork-on-save and cosmetic-rename cases above. Consequence for generate-theme-then-generate-objects workflows: objects built with the pre-paste id carry an unknown `ThemeName` and take the §23 substitution path (styles unbound, `LocalCSS` discarded). Capture `ThemeName` from a copy made after the paste instead (§0); measured result of doing so, 287/287 style references bound with zero overrides. Reported and measured by Hiromine Fujita (issue #2; FM Pro 26.0.2, macOS). Confirmed first party through Save as XML rather than clipboard: after one in-file copy/paste in Manage Themes, the stored ThemeCatalog held the original theme under its known id and the duplicate under a fresh `.custom.` UUID, display name uniquified with a ` 2` suffix, the custom style's `FM-` id preserved, and the 607-rule CSS identical in content but re-serialised in a different rule order — so theme comparisons must normalise rule order before diffing (FM Pro 26.0.2, macOS, Sept 2026). ✓
 
 ---
 
