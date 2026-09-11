@@ -141,12 +141,15 @@ CC BY 4.0. Free to use, share and adapt with attribution. Attribution is require
 
 Found something that doesn't round-trip? A production export that contradicts the spec? Open an issue or PR.
 
+First external contributions landed in 2.6: Hiromine Fujita measured the `1.0pt` length drop and the theme-paste id reassignment (issues #1 and #2), with a protocol matching the spec's own round-trip method.
+
 ---
 
 ## Version history
 
 | Version | Notes |
 |---|---|
+| 2.6 | First external contributions, measured to the repo's own standard by Hiromine Fujita (issues #1 and #2). Integer CSS lengths written `1.0pt` are dropped at paste, so write `1pt` (§26.2, §23). Pasting a theme mints a fresh custom-theme UUID, so capture `ThemeName` after the paste, not from the theme XML you pasted (§0, §28.1). And the mismatch mechanism pinned down along the way: on a wrong `ThemeName` the object is rebuilt from `FullCSS` with supplied `LocalCSS` discarded (§25.3). All three behaviours round-trip confirmed first party before release. |
 | 2.5 | Object anchoring verified. WebViewer handling enhanced. Earlier flag readings corrected. Token reduction pass across the spec. |
 | 2.4 | Full closure pass against FileMaker Pro 26.0.1.51. Observed items now fully verified; production testing continues.|
 | 2.3 | Eight mechanisms corrected by round trip verification against FileMaker Pro 26.0.1.51. The spec is now close to fully verified. |
