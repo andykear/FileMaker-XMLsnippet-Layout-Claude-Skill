@@ -149,6 +149,7 @@ First external contributions landed in 2.6: Hiromine Fujita measured the `1.0pt`
 
 | Version | Notes |
 |---|---|
+| 2.7 | FieldObj bit 20 corrected (override data formatting with value list, inverted, not an edit box marker). Anchor conversion rule and bit 10 naming added.
 | 2.6 | Excellent external contributions, measured to the repo's own standard by Hiromine Fujita (issues #1 and #2). Integer CSS lengths written `1.0pt` are dropped at paste, so write `1pt` (§26.2, §23). Pasting a theme mints a fresh custom-theme UUID, so capture `ThemeName` after the paste, not from the theme XML you pasted (§0, §28.1). And the mismatch mechanism pinned down along the way: on a wrong `ThemeName` the object is rebuilt from `FullCSS` with supplied `LocalCSS` discarded (§25.3). All three behaviours round-trip confirmed first party before release. |
 | 2.5 | Object anchoring verified. WebViewer handling enhanced. Earlier flag readings corrected. Token reduction pass across the spec. |
 | 2.4 | Full closure pass against FileMaker Pro 26.0.1.51. Observed items now fully verified; production testing continues.|
