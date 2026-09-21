@@ -38,6 +38,8 @@ Silent failure modes — where FileMaker accepts malformed XML and drops element
 
 The result is a formal specification for a format that Claris has never documented.
 
+The 2.7 minor corrections came from the opposite direction to the rest of this repo: setting each property against a live file and reading the resulting Save as XML, rather than round-tripping the clipboard. The two methods agree everywhere else they overlap, which is the strongest check either has had.
+
 ---
 
 ## What's in the box
