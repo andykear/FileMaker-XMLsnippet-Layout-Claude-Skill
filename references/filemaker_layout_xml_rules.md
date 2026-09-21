@@ -174,7 +174,7 @@ DDR and Save as XML use the same four bits with different polarity. See §2.3 fo
 | 30 | 1073741824 | Right anchor **on** |
 | 31 | 2147483648 | Bottom anchor **on** |
 
-No anchors is `0`; all four is `4026531840`. The clipboard's inverted left and top bits are a clipboard-only convention.
+No anchors is `0`; all four is `4026531840`. The clipboard's inverted left and top bits are a clipboard-only convention. A default object (anchored left and top) is `805306368` here and `0` in the clipboard, so left and top must be flipped when converting between the two ✓
 
 #### Conversion
 
@@ -305,11 +305,11 @@ self:normal .self
 | 2 | 4 | Not enterable in Browse mode — also the low bit of the Browse-mode access-state pair, see decode below ✓ |
 | 4 | 16 | Not enterable in Find mode — the Find-mode counterpart of bit 2, see decode below ✓ |
 | 5 | 32 | Tab to next object ✓ |
-| 10 | 1024 | Calendar popup button (with bit 19) ✓ |
+| 10 | 1024 | Calendar popup button (with bit 19) ✓. Save as XML calls this `includeShowHideIcon` |
 | 11 | 2048 | Auto-complete using existing values ✓ |
 | 15 | 32768 | Quick Find off — also sets `quickFind="0"` ✓ |
 | 19 | 524288 | Calendar popup button (with bit 10) ✓ |
-| 20 | 1048576 | Edit box marker — set when displayType=0 ✓ |
+| 20 | 1048576 | Override data formatting with value list — **OFF**. Inverted, so every plain edit box carries it. Never set it to mark an edit box: on a value list field it turns the override off ✓ |
 | 24 | 16777216 | Field access-state marker — Browse mode, high bit of the Select Only pair, see decode below ✓ |
 | 25 | 33554432 | Field access-state marker — Find mode, high bit of the Select Only pair, see decode below ✓ |
 
@@ -336,14 +336,14 @@ Common combinations:
 - `32804` — not enterable + tab + Quick Find off ✓
 - `32800` — tab + Quick Find off ✓
 - `525344` — tab + calendar button (bits 5,10,19) ✓
-- `1048608` — tab + edit box marker (bits 5,20) ✓
-- `1048610` — tab + edit box marker + select on entry (bits 1,5,20) ✓
-- `1048612` — tab + edit box marker + View Only, Browse (bits 2,5,20) ✓
-- `17825824` — tab + edit box marker + Select Only, Browse (bits 5,20,24) ✓
-- `17825828` — tab + edit box marker + Set by Calculation, Browse (bits 2,5,20,24) ✓
-- `1048624` — tab + edit box marker + View Only, Find (bits 4,5,20) ✓
-- `34603040` — tab + edit box marker + Select Only, Find (bits 5,20,24,25 — Find-mode Select Only stacks on top of Browse-mode Select Only in this capture) ✓
-- `34603056` — tab + edit box marker + Set by Calculation, Find, over Select Only Browse (bits 2,4,5,20,24,25) ✓
+- `1048608` — tab + bit 20 (bits 5,20) ✓
+- `1048610` — tab + bit 20 + select on entry (bits 1,5,20) ✓
+- `1048612` — tab + bit 20 + View Only, Browse (bits 2,5,20) ✓
+- `17825824` — tab + bit 20 + Select Only, Browse (bits 5,20,24) ✓
+- `17825828` — tab + bit 20 + Set by Calculation, Browse (bits 2,5,20,24) ✓
+- `1048624` — tab + bit 20 + View Only, Find (bits 4,5,20) ✓
+- `34603040` — tab + bit 20 + Select Only, Find (bits 5,20,24,25 — Find-mode Select Only stacks on top of Browse-mode Select Only in this capture) ✓
+- `34603056` — tab + bit 20 + Set by Calculation, Find, over Select Only Browse (bits 2,4,5,20,24,25) ✓
 
 ### §5.3 FieldObj displayType
 
