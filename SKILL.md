@@ -15,7 +15,7 @@ Most rules below concern silent failures: the XML pastes without error and is wr
 
 Every object must carry the target layout's `<ThemeName>` verbatim. The wrong identifier causes text doubling and CSS class names rendering as visible text, or fails silently: FM substitutes the destination theme and rebuilds the object from `FullCSS`, discarding `LocalCSS` and leaving `CustomStyles` unbound (§25.3).
 
-1. If the user supplied any layout XML, clipboard export or Save as XML, extract it: `grep -m1 "ThemeName" file.xml`
+1. If the user supplied a clipboard export, extract it: `grep -m1 "ThemeName" file.xml`. A **Save as XML export has no `<ThemeName>`** — read the target layout's `<LayoutThemeReference name="...">` instead, matching the `<Layout>` element by name, since an export holds every layout in the file (§0).
 2. If not, ask before generating. The user gets it by copying any object from the target layout and pasting into a text editor.
 3. Never default to `com.filemaker.theme.apex_blue`. It is a placeholder in the examples only.
 4. If the theme itself was pasted as part of the workflow, FileMaker assigned it a fresh custom-theme UUID at paste time. Capture `ThemeName` from a copy made after the paste, never from the theme XML that was pasted (§28.1).
