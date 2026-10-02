@@ -22,10 +22,33 @@ The user may upload XML in one of two ways:
 - **Clipboard paste export** — objects copied from a FileMaker layout and saved as XML (the `fmxmlsnippet type="LayoutObjectList"` format). This is the most common case.
 - **Save-as-XML export** — a full layout export from File > Save a Copy As > XML.
 
-Both contain `<ThemeName>`. Extract it the same way:
+**The two formats name the theme differently, and only one of them has a `<ThemeName>`.**
+
+A clipboard export carries `<ThemeName>` on every object, and all objects on one
+layout share it, so the first occurrence is the right one:
 ```
 grep -m1 "ThemeName" filename.xml
 ```
+
+A Save as XML export has **no `<ThemeName>` element at all** — searching one for
+that string returns nothing, which reads as "no theme found" rather than as a
+wrong lookup. There the layout names its theme by reference, and the `name`
+attribute is the identifier to use verbatim:
+```xml
+<Layout name="Invoice Detail" ...>
+  <LayoutThemeReference id="2"
+    name="com.filemaker.theme.custom.BCC0E575_2475_45EA_ADFB_A86B4893EE94"
+    Display="Blank" Base="com.filemaker.theme.apex_blue"/>
+```
+Take it from the `<Layout>` element whose `name` is the target layout, not the
+first one in the file: an export holds every layout and they need not share a
+theme. **Match on the layout definition, which is the `<Layout>` carrying a
+`<PartsList>`.** An export also lists layouts as folders and menu entries, and
+those carry no `<LayoutThemeReference>` at all — in one 147-layout file, 11 names
+existed as both a definition and a folder, so matching on the name alone can land
+on the folder and read as "this layout has no theme". `Display` is the name shown
+in Manage Themes and `Base` is the stock theme it was derived from; neither is the
+identifier. ✓
 
 Custom themes have identifiers like:
 ```
@@ -36,7 +59,7 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 
 ### Rules
 
-- If the user uploads any XML file containing layout objects, extract `ThemeName` from it before generating anything. ✓
+- If the user uploads any XML file containing layout objects, extract the theme identifier from it before generating anything — `<ThemeName>` from a clipboard export, `<LayoutThemeReference name="...">` from a Save as XML. ✓
 - If no file is provided, ask for the identifier before generating — not after.
 - Never default to `com.filemaker.theme.apex_blue` unless confirmed. It is a placeholder in the examples only.
 - Use the extracted identifier verbatim in every `<ThemeName>` element throughout the generated XML.
@@ -84,30 +107,37 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 
 ### §2.1 Object flags — generation rule
 
-**Use `flags="0"` for all generated objects except when setting anchoring.** Bits 0 to 25 are set by FileMaker from object state and must not be written. Bits 28 to 31 are object anchoring: they are both readable and settable, and are the one part of this field a generator may legitimately author. `flags="0"` decodes to the FileMaker default of left and top anchored, so the zero default remains correct for any object that does not need to resize. See §2.2.
+**Use `flags="0"` for all generated objects except when setting anchoring.** Every bit below 28 is set by FileMaker from object state and must not be written. Bits 28 to 31 are object anchoring: they are both readable and settable, and are the one part of this field a generator may legitimately author. `flags="0"` decodes to the FileMaker default of left and top anchored, so the zero default remains correct for any object that does not need to resize. See §2.2.
 
 | Bit | Value | Meaning |
 |---|---|---|
 | 0 | 1 | Has `ConditionalFormatting` ✓ |
+| 1 | 2 | **Locked** — the Inspector's padlock ✓ |
 | 2 | 4 | Object has a HideCondition ✓ |
-| 8 | 256 | **Field object: participates in Find requests ("Apply in Find Mode").** Confirmed on four Field objects across all four field-entry access states, additive and independent of every other flag ✓. Not icon presence — an icon-bearing standalone Button captured directly returned `flags="0"` at the Object level regardless of its icon. Icon presence lives entirely inside `ButtonObj` (displayType + FNAM/GLPH/SVG streams, see §19.3), never in Object flags. |
-| 12 | 4096 | Line/Rect: round-trips intact but no visible effect found anywhere in the FM Pro 26 Inspector — treat as an inert/legacy marker; do not generate expecting behaviour ✓ |
-| 13 | 8192 | Line/Rect: same as bit 12 — inert on round-trip in FM Pro 26 ✓ |
+| 3 | 8 | Not a single property. Measured on objects created in the file: a Button, a PopoverButton and each **segment** of a ButtonBar carry it with nothing else set, while a Rect, Oval, Rounded Rectangle, Text, Group, Web Viewer and the ButtonBar container itself do not. Provenance matters — §14 records a generated PopoverButton emitted with `flags="0"` round-tripping as `0`, and §6.1 records a merge Text coming back as `8` after a paste, where a merge Text created in the file carried no bit 3 here. Read it as "FileMaker set this", not as a property you can infer ◎ |
+| 4 | 16 | **Slide up** (Sliding & Visibility) ✓ |
+| 5 | 32 | **Slide left** (Sliding & Visibility) ✓ |
+| 6 | 64 | **Resize enclosing part** (Sliding & Visibility) ✓ |
+| 8 | 256 | **Apply in Find Mode.** Confirmed on four Field objects across all four field-entry access states, additive and independent of every other flag ✓. Not field-only: a Rectangle given the same property also returned bit 8, in both formats ✓. Not icon presence — an icon-bearing standalone Button captured directly returned `flags="0"` at the Object level regardless of its icon. Icon presence lives entirely inside `ButtonObj` (displayType + FNAM/GLPH/SVG streams, see §19.3), never in Object flags. |
+| 9 | 512 | **Hide when printing** ✓ |
+| 12 | 4096 | Set on a **Line**, always together with bit 13, and not a direction indicator (§7). A Line created with no properties at all returns `12288` in both formats, while a Rect, Oval and Rounded Rectangle created the same way return `0` — so this is a Line marker rather than the "Line/Rect" the row previously read. Round-trips intact with no visible effect in the FM Pro 26 Inspector; do not generate ✓ |
+| 13 | 8192 | Always accompanies bit 12 on a Line — never seen apart from it ✓ |
 | 14 | 16384 | Has `ToolTip` ✓. (Placeholder presence is a separate `FieldObj` flag, bit 17, not this Object bit.) |
-| 24 | 16777216 | Field access-state marker — Browse mode, part of the full decode in §5.2 ✓ |
-| 25 | 33554432 | Field access-state marker — Find mode, part of the full decode in §5.2 ✓ |
+| 16 | 65536 | **Show hand cursor over this object** — measured by single-property isolation on a button created in the file. Only a button, popover button or group with an action accepts the property, which is why it never appeared on a rectangle. Note §9.1 separately finds that the legacy `65544`/`65545` values reflect a naming mechanism FM 26 no longer uses; the two findings are about different objects ◎ |
 | 28 | 268435456 | Anchoring: **left anchor OFF**. Inverted sense. See §2.2 ✓ |
 | 29 | 536870912 | Anchoring: **top anchor OFF**. Inverted sense. See §2.2 ✓ |
 | 30 | 1073741824 | Anchoring: **right anchor ON**. See §2.2 ✓ |
 | 31 | -2147483648 | Anchoring: **bottom anchor ON**. See §2.2 ✓ |
 
-The generation rule for bits 0 to 25 is simple: use `flags="0"` and let FileMaker set these. Bits 28 to 31 are the exception and are covered in §2.2.
+The generation rule for every bit below 28 is simple: use `flags="0"` and let FileMaker set these. Bits 28 to 31 are the exception and are covered in §2.2.
 
-**Do not generate bits 3 or 16.** A portal field with the row option engaged, and a natively-named object, both return `flags="0"`. Object naming lives entirely in the `name` attribute; no flag bit is associated with it on any object type. ✓
+**Field entry access is not in this integer.** Bits 24 and 25 were previously listed here as Browse- and Find-mode access markers. They are `FieldObj` flags, not `Object` flags: three fields set to View Only and Select Only in each mode all returned `Object flags="0"` with the state carried entirely in the field’s own integer. §5.2 and §5.2.1 have the correct decode. ✓
 
-**Bits 1 and 9 occur on FM 26 output with no known cause.** Observed on consecutive `ExternalObject` (WEBV) captures placed identically: `flags="0"`, `flags="2"` and `flags="512"` across three objects, none set deliberately. Do not generate either; do not treat their presence as meaningful when analysing. ○
+**Object naming carries no flag bit.** A portal field with the row option engaged, and a natively-named object, both return `flags="0"`: naming lives entirely in the `name` attribute, on every object type. ✓ Bits 3 and 16 are not associated with naming. Bit 3 is the button-family marker §9.1 and §14 already report; bit 16 is Show hand cursor. Both are set by FileMaker from object state, so the `flags="0"` generation rule is unchanged.
 
-**Never generate `260`, `261`, `256`, `65544` or `65545`.** FM 26 encodes no ButtonBar segment state in Object flags at all (§9.1). ✓
+**Bits 1 and 9 are Locked and Hide when printing.** This resolves an earlier open item: three `ExternalObject` (WEBV) captures thought to be placed identically returned `flags="0"`, `flags="2"` and `flags="512"`, which reads as two of the three having had the padlock and Hide when printing set. Identified by building ten objects differing by exactly one Inspector property each and reading the resulting value: `locked` moved bit 1 and nothing else, `hideWhenPrinting` moved bit 9 and nothing else. ✓
+
+**Never generate `260`, `261`, `256`, `65544` or `65545`.** FM 26 encodes no ButtonBar segment state in Object flags at all (§9.1). ✓ Each decomposes into bits from the table above — `256` is Apply in Find Mode, `260` adds a HideCondition — but §9.1 attributes the two bit-16 values to a naming mechanism FM 26 no longer uses, so the decomposition does not establish what produced them in the captures that prompted the note.
 
 ---
 
@@ -199,6 +229,36 @@ ddr_options     = clipboard_flags XOR 0x30000000
 Eight anchor states generated as clipboard XML across three object types (Text, WebViewer, Rectangle), pasted, then read back from a Save as XML export of the same file. All twenty-four objects matched, and the eight paired values satisfy the XOR relationship exactly. FileMaker Pro 26.0.1.51, macOS. ✓
 
 Anchoring is therefore readable directly from a DDR, which matters for whole-solution analysis where no clipboard round-trip is available. `Options` also appears on `Part > Definition` with an unrelated meaning; only `LayoutObject > Options` carries anchoring.
+
+#### The whole field is shared, not only the anchor bits
+
+Twenty-seven objects spanning eleven object types — Field, Text, Button,
+PopoverButton, GroupButton, Rect, RRect, Oval, Line, ExternalObject and the labels
+FileMaker generates — were read in both formats from the same layout, each
+differing from a baseline by exactly one Inspector property. **Every object agreed:**
+each property moved the same bit in the same direction in the clipboard `flags` and
+in the DDR `Options`, with no exceptions. A representative selection:
+
+| Property | Bit | Clipboard `flags` | DDR `Options` |
+|---|---:|---:|---:|
+| baseline, no properties | — | `0` | `805306368` |
+| Locked | 1 | `2` | `805306370` |
+| HideCondition | 2 | `4` | `805306372` |
+| a button, no properties set | 3 | `8` | `805306376` |
+| Slide up | 4 | `16` | `805306384` |
+| Slide left | 5 | `32` | `805306400` |
+| Resize enclosing part | 6 | `64` | `805306432` |
+| Hide when printing | 9 | `512` | `805306880` |
+| ToolTip | 14 | `16384` | `805322752` |
+| Show hand cursor | 16 | `65544` | `805371912` |
+
+The last row is a button rather than a rectangle, because only a button accepts Show
+hand cursor, so both of its values carry bit 3 as well.
+
+So bits 0 to 16 are identical in position **and** in polarity between the two
+formats, and the XOR conversion above is needed only for bits 28 and 29. A
+decoder written for one format reads the other correctly everywhere except
+anchoring. ✓
 
 ---
 
@@ -1487,7 +1547,7 @@ LocalCSS blocks support multiple pseudo-selectors beyond `.self`. All use the `s
 | Selector | Applies to | Purpose |
 |---|---|---|
 | `.self` | All objects | Primary object styling ✓ |
-| `.text` | Field: renders — confirmed with a margin/padding override, visibly indented on paste ✓. Text object: LocalCSS on `.text` survives and merges into `FullCSS` but has **no visible effect** — confirmed with both a colour override and a padding override, neither rendered on a standalone Text object. Treat as a silent-failure selector on Text objects specifically (see §23); it only has real effect on Field objects. |
+| `.text` | Field, Text | Field: renders — confirmed with a margin/padding override, visibly indented on paste ✓. Text object: LocalCSS on `.text` survives and merges into `FullCSS` but has **no visible effect** — confirmed with both a colour override and a padding override, neither rendered on a standalone Text object. Treat as a silent-failure selector on Text objects specifically (see §23); it only has real effect on Field objects. |
 | `.icon` | Button, TabPanel | Renders via **`-fm-icon-color`** (and `-fm-icon-padding`), not a plain `color` property. Confirmed by both a native icon-colour change and a generated icon-colour override, both landing correctly when placed in `TextObj > Styles` (see §8) ✓ |
 | `.row` | Portal | Default row background — confirmed, survives, merges, renders ✓ |
 | `.row_alt` | Portal | Alternating row background — enabled via `-fm-portal-alt-background: true/false` on `.self`, confirmed ✓ |
@@ -1658,7 +1718,7 @@ externalFlagSet:  "32865" (WebViewer, bridge-enabled — see §15.1 for the bit 
 Anchoring:        "0" = left+top (default). "-1073741824" = all four (full-bleed). See §2.2
 ```
 
-Do not generate Object flags bits 0, 2, 3, 8, 9, 12, 13, 14, 16, 24 or 25. FileMaker sets them from object state, or they do not exist (§2.1).
+Do not generate any Object flags bit below 28. FileMaker sets them from object state, or they do not exist (§2.1). Named so far: 0, 1, 2, 3, 4, 5, 6, 8, 9, 12, 13, 14 and 16. Field entry access is NOT among them — bits 24 and 25 are `FieldObj` flags (§5.2), not `Object` flags.
 
 Bits 28 to 31 are the exception: they are object anchoring and **should** be generated when an object must resize with the window. `flags="0"` is left and top anchored, the FileMaker default. Use `-1073741824` for a full-bleed object. Full table in §2.2.
 
@@ -1793,7 +1853,7 @@ FileMaker 2026 added calculation-driven control over object access states. The f
 - Scope: **fields only.** On a non-field object it is unsafe — a generated rectangle carrying `CanEntryCalc` failed to paste at all (the whole object was dropped, not just the element). Never attach it to anything but a field. ✓
 - Contains a standard `<Calculation>` with CDATA. ✓
 - A generated `CanEntryCalc` enforces on paste (a true calc allows entry, a false calc blocks it). Base `FieldObj` flags are fine; the high access flag bits a natively built field carries are not required for the calc to take effect. ✓
-- **The Object-level flag bits governing which access mode is active (bits 2/24 for Browse mode, bits 4/25 for Find mode) are documented in full in §5.2.1.** `CanEntryCalc` itself is a single, shared calculation element referenced by whichever bit-pair(s) are set to Set by Calculation — there is one calc per field, not one per mode. ✓
+- **The flag bits governing which access mode is active (bits 2/24 for Browse mode, bits 4/25 for Find mode) are `FieldObj` flags, not `Object` flags, and are documented in full in §5.2.1.** `CanEntryCalc` itself is a single, shared calculation element referenced by whichever bit-pair(s) are set to Set by Calculation — there is one calc per field, not one per mode. ✓
 
 **Closed.** A full sweep of the Field entry-behavior dialog (Edit / Select Only / View Only / Set by Calculation, in both Browse and Find modes) produced no new calc-driven element beyond `CanEntryCalc`. It is confirmed as the sole calc-driven access mechanism on FM Pro 26.0.1.51.
 
