@@ -155,6 +155,7 @@ First external contributions landed in 2.6: Hiromine Fujita measured the `1.0pt`
 
 | Version | Notes |
 |---|---|
+| 2.9 | **FileMaker 26.1 support — new options tagged `[26.1+]`.** Calculated button icons (`SvgCalc`), single checkbox, clipped-contents indicator and portal new-record row at top. |
 | 2.8 | Further refinement|
 | 2.7 | FieldObj bit 20 corrected (override data formatting with value list, inverted, not an edit box marker). Anchor conversion rule and bit 10 naming added.
 | 2.6 | Excellent external contributions, measured to the repo's own standard by Hiromine Fujita (issues #1 and #2). Integer CSS lengths written `1.0pt` are dropped at paste, so write `1pt` (§26.2, §23). Pasting a theme mints a fresh custom-theme UUID, so capture `ThemeName` after the paste, not from the theme XML you pasted (§0, §28.1). And the mismatch mechanism pinned down along the way: on a wrong `ThemeName` the object is rebuilt from `FullCSS` with supplied `LocalCSS` discarded (§25.3). All three behaviours round-trip confirmed first party before release. |

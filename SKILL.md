@@ -32,7 +32,7 @@ Not required on `ExternalObj`; omit it there (§15).
 
 ## ButtonBar segment labels go in LabelCalc, not Data
 
-Segment text in `CharacterStyleVector > Data` round-trips byte-perfect and renders blank. Put segment labels in `<LabelCalc>` as the last child of each segment Button, `Data` empty, segment `flags="8"`, empty `ButtonObj buttonFlags="2" iconSize="16"`.
+Segment text in `CharacterStyleVector > Data` round-trips byte-perfect and renders blank. Put segment labels in `<LabelCalc>` after `ButtonObj` in each segment Button, `Data` empty, segment `flags="8"`, empty `ButtonObj buttonFlags="2" iconSize="16"`. On a `[26.1+]` calculated-icon segment, `SvgCalc` follows `LabelCalc` and `buttonFlags` is `6`; that shape was copied, not paste-tested.
 
 PopoverButtons are the exact inverse: label in `Data`, never generate `LabelCalc` (§9, §9.1, §14).
 
@@ -65,6 +65,10 @@ Above roughly 150 KB, FileMaker pastes every object and silently discards every 
 ## Write integer CSS lengths without a decimal point
 
 A `LocalCSS` length written `1.0pt` is dropped at paste; `1pt` and `1.5pt` survive. Per declaration and silent: a border generated at `1.0pt` keeps style and colour, width falls to `0pt`, nothing draws. Serialise lengths `%g` style (§26.2).
+
+## FileMaker 26.1 options are tagged `[26.1+]`
+
+Calculated button icons (`SvgCalc`, §19.4), the single checkbox (`FieldObj` bit 22), the clipped-contents indicator (bit 23) and the portal's new-record row at top (`portalFlags` bit 10) exist only from FileMaker 26.1. Use them only when the target file and its users are on 26.1 or later; otherwise leave them out. For a calculated icon on a standalone button, emit `SvgCalc` and `buttonFlags` bit 2 and omit the icon streams: FileMaker adds a placeholder itself. That was tested on standalone buttons only; segments and popover buttons are untested.
 
 ## Scope
 
