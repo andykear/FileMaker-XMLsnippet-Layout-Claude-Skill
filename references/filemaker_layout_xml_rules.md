@@ -8,6 +8,8 @@ Paste-ready FileMaker layout object XML (`fmxmlsnippet type="LayoutObjectList"`)
 
 **Methodology note:** ✓ certifies round-trip *survival*. Survival does not guarantee *rendering* — FM 26 will faithfully round-trip elements its renderer no longer reads (see §9.1). Where a claim concerns on-screen behaviour, visual confirmation is stated explicitly.
 
+**`[26.1+]`** marks a flag bit or element that only FileMaker 26.1 or later writes. Captures for these were taken on FileMaker Pro 26.1. Leave them out when the target file or its users are on 26.0.x; what 26.0.x does with them on paste has not been tested.
+
 ---
 
 ## §0 Pre-flight: theme identification
@@ -65,6 +67,10 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 - Use the extracted identifier verbatim in every `<ThemeName>` element throughout the generated XML.
 - If the workflow pasted the theme itself (a generated theme, clipboard type `XMTH`), take `ThemeName` from a copy made **after** the paste: copy the theme back out of Manage Themes, or copy any object from a layout that uses it. FileMaker mints a fresh custom-theme UUID at theme paste time, so the id inside the theme XML that was pasted no longer exists in the file (§28.1). ✓
 
+### Paste position
+
+A normal paste in Layout mode moved generated objects as a group: in a 26.1 test, four pasted objects all shifted by the same offset (top −27, left +322), keeping their sizes and relative positions, and a field inside a portal kept its `Bounds` within the portal. ◎ (one observation) FileMaker 26.1.1 change: Edit > Paste in Place (Shift-Command-V on macOS, Ctrl+Shift+Alt+V on Windows) pastes objects at their copied position instead of offsetting them, and grows the layout to fit (FileMaker 26.1.1 release notes); not tested with generated XML. ○
+
 ### Clipboard behaviour: single-object copy
 
 **A single selected Text object copies to the system clipboard as plain text, not as `fmxmlsnippet` XML.** Two or more selected objects — of any type, including two Text objects together — copy correctly as layout XML. This affects any workflow, including the Inspector's own capture routines, that asks a user to "select one object and copy": a lone Text object silently produces no usable XML, with no error shown. When isolating a single Text object for analysis, select it alongside any other object (or a throwaway shape) and discard the extra object from the resulting snippet afterward. ✓
@@ -118,7 +124,7 @@ com.filemaker.theme.custom.A3921BA7_9833_48D0_9166_F8B66C7D76F7
 | 4 | 16 | **Slide up** (Sliding & Visibility) ✓ |
 | 5 | 32 | **Slide left** (Sliding & Visibility) ✓ |
 | 6 | 64 | **Resize enclosing part** (Sliding & Visibility) ✓ |
-| 8 | 256 | **Apply in Find Mode.** Confirmed on four Field objects across all four field-entry access states, additive and independent of every other flag ✓. Not field-only: a Rectangle given the same property also returned bit 8, in both formats ✓. Not icon presence — an icon-bearing standalone Button captured directly returned `flags="0"` at the Object level regardless of its icon. Icon presence lives entirely inside `ButtonObj` (displayType + FNAM/GLPH/SVG streams, see §19.3), never in Object flags. |
+| 8 | 256 | **Apply in Find Mode.** Confirmed on four Field objects across all four field-entry access states, additive and independent of every other flag ✓. Not field-only: a Rectangle given the same property also returned bit 8, in both formats ✓. Not icon presence — an icon-bearing standalone Button captured directly returned `flags="0"` at the Object level regardless of its icon. Icon presence is never in Object flags: it lives in `ButtonObj` (displayType + FNAM/GLPH/SVG streams, see §19.3), and a `[26.1+]` calculated icon also adds an `SvgCalc` child of the `Object` (§19.4). |
 | 9 | 512 | **Hide when printing** ✓ |
 | 12 | 4096 | Set on a **Line**, always together with bit 13, and not a direction indicator (§7). A Line created with no properties at all returns `12288` in both formats, while a Rect, Oval and Rounded Rectangle created the same way return `0` — so this is a Line marker rather than the "Line/Rect" the row previously read. Round-trips intact with no visible effect in the FM Pro 26 Inspector; do not generate ✓ |
 | 13 | 8192 | Always accompanies bit 12 on a Line — never seen apart from it ✓ |
@@ -370,6 +376,8 @@ self:normal .self
 | 15 | 32768 | Quick Find off — also sets `quickFind="0"` ✓ |
 | 19 | 524288 | Calendar popup button (with bit 10) ✓ |
 | 20 | 1048576 | Override data formatting with value list — **OFF**. Inverted, so every plain edit box carries it. Never set it to mark an edit box: on a value list field it turns the override off ✓ |
+| 22 | 4194304 | `[26.1+]` **Display single checkbox without value** — a checkbox set (`displayType="3"`) with a value list. Isolated against a twin written in the same capture; the Inspector showed the option ticked on a field carrying this bit ✓. FileMaker's own copy of such a field, renamed, pasted and came back unchanged ✓. Per the release notes it draws one checkbox with no label; Browse mode not observed. Seen only on fields without bit 20 ◎ |
+| 23 | 8388608 | `[26.1+]` **Show indicator for clipped contents** — an edit box (`displayType="0"`). Isolated against a twin written in the same capture (the twin was bound to a number field rather than a text field; the bit was the only other `FieldObj` difference); the Inspector check on a field carrying this bit was uncertain ○. FileMaker's own copy of such a field, renamed, pasted and came back unchanged ✓. Per the release notes it shows three dots in Browse mode when the text doesn't fit; Browse mode not observed. Seen only on fields without bit 20 ◎ |
 | 24 | 16777216 | Field access-state marker — Browse mode, high bit of the Select Only pair, see decode below ✓ |
 | 25 | 33554432 | Field access-state marker — Find mode, high bit of the Select Only pair, see decode below ✓ |
 
@@ -649,9 +657,9 @@ Button label text lives in `TextObj > CharacterStyleVector > Style > Data`. `Tex
 
 | Attribute | Values |
 |---|---|
-| `buttonFlags` | Bitmask. Bit 0 (1) = calculated label — set by FM when a non-literal `LabelCalc` expression applies ✓; NOT set for quoted-literal LabelCalcs, which return `buttonFlags="2"` on both native and generated FM 26 segments ✓. Bit 1 (2) = round-trips intact ✓ (present on all observed FM 26 segments; earlier noted as toggle). `3` = both bits. Generate `0` on standalone buttons; on segments the native shape is `buttonFlags="2" iconSize="16"` (§9). |
+| `buttonFlags` | Bitmask. Bit 0 (1) = calculated label — set by FM when a non-literal `LabelCalc` expression applies ✓; NOT set for quoted-literal LabelCalcs, which return `buttonFlags="2"` on both native and generated FM 26 segments ✓. Bit 1 (2) = round-trips intact ✓ (present on all observed FM 26 segments; earlier noted as toggle). `3` = both bits. Generate `0` on standalone buttons; on segments the native shape is `buttonFlags="2" iconSize="16"` (§9). Bit 2 (4) = `[26.1+]` calculated icon in effect, always alongside an `<SvgCalc>` element (§19.4): standalone `0` → `4` ✓ (pasted and copied back); segment `2` → `6` ◎ and popover button `4` ◎ (copied, not pasted) |
 
-**Segment icons (FM 26, verified by per-segment capture).** An icon on a segment is carried entirely inside `ButtonObj` — segment `Object flags` are untouched. Components:
+**Segment icons (FM 26, verified by per-segment capture).** An icon on a segment is carried inside `ButtonObj`, never in segment `Object flags`. (A `[26.1+]` calculated icon also adds `SvgCalc` after `LabelCalc`, outside `ButtonObj`; §19.4.) Components:
 
 - `displayType` on the segment `ButtonObj` selects the label/icon arrangement, fully derived by capturing one bar per Button Bar Setup arrangement option in dialog order: `0` = label only, `1` = icon only, `2` = icon above label, `3` = label above icon, `4` = icon left of label, `5` = icon right of label ✓. The icon streams are arrangement-independent (identical FNAM/GLPH/SVG across all values), and `iconSize` persists dormant at `displayType="0"` ✓
 - Three `Stream` children follow inside `ButtonObj`: `FNAM` (hex-encoded icon/font name record), `GLPH` (single byte `01`), and `SVG ` (hex-encoded SVG source with an `fm_fill` class group) — one triple per segment, each segment can carry a different icon ✓
@@ -659,7 +667,7 @@ Button label text lives in `TextObj > CharacterStyleVector > Style > Data`. `Tex
 
 See §19 for the SVG stream format detail.
 | `iconSize` | `0`–`19` |
-| `displayType` | `0`–`4` (text/icon display mode) |
+| `displayType` | `0`–`5` (label/icon arrangement, as listed above) |
 
 ### §8.2 Layout object name
 
@@ -669,7 +677,7 @@ Do not confuse this with `TextObj > Styles > CustomStyles > Name` — that eleme
 
 ### §8.3 HideCondition
 
-`HideCondition` is the LAST behavioural child of the `Object`, after the entire typed inner element block. On shapes FM emits it **before** `RenderFormat` on round-trip; generating it after `RenderFormat` also pastes correctly — FM normalises. Applies to any object type. When `CanEntryCalc` is also present, the order is `CanEntryCalc` then `HideCondition`. See §21. ✓
+`HideCondition` is the LAST behavioural child of the `Object`, after the entire typed inner element block. On shapes FM emits it **before** `RenderFormat` on round-trip; generating it after `RenderFormat` also pastes correctly — FM normalises. Applies to any object type. When `CanEntryCalc` is also present, the order is `CanEntryCalc` then `HideCondition`. See §21. ✓ A `[26.1+]` `SvgCalc` also follows the typed element on buttons; its position relative to `HideCondition` has not been captured (§19.4).
 
 ```xml
 <Object type="Field" key="1" flags="4" rotation="0">
@@ -760,7 +768,7 @@ Sets `Object flags` bit 2 (value 4). ✓
 </Object>
 ```
 
-- **Segment label in `<LabelCalc>` as the last child of the segment `Object`, after `ButtonObj`** — this is what the FM 26 renderer reads. Generated LabelCalc survives round-trip verbatim and renders. ✓
+- **Segment label in `<LabelCalc>` as the last child of the segment `Object`, after `ButtonObj`** — this is what the FM 26 renderer reads. Generated LabelCalc survives round-trip verbatim and renders. ✓ On a `[26.1+]` calculated-icon segment, `SvgCalc` follows `LabelCalc` (§19.4) ◎.
 - `CharacterStyleVector > Data` on segments: leave empty (`<Data/>`), matching native shape. Populated Data survives but does not render — see §9.1. ✓
 - Segment Object `flags="8"` (native FM 26 plain segment; see flag table note below) ✓
 - `ButtonObj buttonFlags="2" iconSize="16" displayType="0"`, empty — no `Step` child on plain segments; a generated `Step id="0" name="None"` is stripped on paste ✓
@@ -885,6 +893,7 @@ self:normal .self
 | 4 | 16 | Reset Scroll Bar When Exiting Record — **inverted logic**: bit absent → checkbox ticked; bit present → checkbox unticked. Confirmed by direct same-batch comparison (`flags=273` vs `flags=257`). Not a required flag — the portal functions normally with or without it. ✓ |
 | 7 | 128 | Filter — requires real `FilterCalc` content AND this bit set together; neither alone is sufficient ✓ |
 | 8 | 256 | "Show scroll bar: When Scrolling" instead of "Always" — only has an effect when bit 0 is also set ✓ |
+| 10 | 1024 | `[26.1+]` **Place row for new record at top** — isolated against a twin written in the same capture; Portal Setup showed the option ticked on a portal carrying this bit ✓. FileMaker's own copy of such a portal, renamed, pasted and came back unchanged ✓. Per the release notes the empty row for a new related record is drawn at the top, and the option needs a relationship that allows creation of related records; Browse mode not observed |
 | 1, 5, 6, 9 | 2, 32, 64, 512 | No effect — confirmed with scrolling+deletion active and separately with Sort/Filter genuinely working, including inside Sort's Specify dialog ✓ |
 
 `TableAliasKey` must reference an actual related table occurrence; pointing it at the portal's own base table gives no valid relationship context, and any `Sort`/`FilterCalc` content is discarded regardless of the flags value. ✓
@@ -1184,7 +1193,7 @@ GroupButtons can contain `Line` children to draw vector icons:
 </Object>
 ```
 
-Popover `Bounds` are absolute layout coordinates, but FM **recomputes them relative to the button** on paste — generated values are treated as approximate. ✓ `PopoverButtonObj` gains `buttonFlags`/`key`/`iconSize`/`displayType` attributes on round-trip (artifacts; omit when generating).
+Popover `Bounds` are absolute layout coordinates, but FM **recomputes them relative to the button** on paste — generated values are treated as approximate. ✓ `PopoverButtonObj` gains `buttonFlags`/`key`/`iconSize`/`displayType` attributes on round-trip (artifacts; omit when generating — except with a `[26.1+]` calculated icon, where `buttonFlags="4"` and `displayType` carry meaning, §19.4).
 
 **The PopoverButton `TextObj` must carry `ExtendedAttributes`** — a bare `<TextObj flags="0"/>` is the §31 leak absorber: in batch testing it received a migrated TitleCalc's raw source as its label. ✓
 
@@ -1193,6 +1202,8 @@ Popover `Bounds` are absolute layout coordinates, but FM **recomputes them relat
 Native shape notes: PopoverButton Object `flags="8"` natively (same value as native ButtonBar segments — bit 3 appears on labelled button-family objects, and on at least one production Edit Box, see §2.1); generated `flags="0"` binds and round-trips as `0` ✓. `PopoverObj` carries `flags` / `position` / `key` attributes on export (artifacts; a bare `<PopoverObj/>` pastes ✓).
 
 Element order in `Popover`: `Bounds` → `Styles` → `TitleCalc` → `PopoverObj`. ✓
+
+`[26.1+]` A PopoverButton written by a tool with a calculated icon copied as `PopoverButtonObj buttonFlags="4"`, the placeholder icon streams ahead of the nested `Popover` object, and `SvgCalc` after `</PopoverButtonObj>` (§19.4). ◎ (one capture) Claris's release notes name only buttons and button-bar segments; whether FileMaker's own setup dialog offers a calculated icon on a popover button was not checked.
 
 ---
 
@@ -1392,6 +1403,8 @@ Additive and enable-gated: `5` = enabled + Fill Color, `7` = enabled + Text Colo
 | 7 | Value is >= (Greater than or equal to) ✓ |
 | 8 | Value is <= (Less than or equal to) ✓ |
 
+FileMaker 26.1.1 change: new conditions added in the Conditional Formatting dialog now default to Formula is (`op` 0) instead of Value is (FileMaker 26.1.1 release notes). That changes what native captures of freshly added conditions look like, not what can be generated.
+
 ### §16.3 Value-op dual storage — a runtime trap
 
 **Value-comparison `Condition` items (op 1–8) store the operand in two places, and both must be generated correctly or the item is dialog-correct but runtime-dead.** `RangeBegin`/`RangeEnd` hold the raw comparison value(s) that the Format > Conditional Formatting dialog reads back — a field with `op="8"` and `RangeBegin>10` displays correctly as "less than or equal to 10" in the dialog. But the actual Browse-mode evaluation runs `Calculation`, which FM materialises as a real formula (e.g. `Self≤10`) — not the operator/value pair. A generated item with an empty or placeholder `Calculation` looks perfectly configured in the dialog and in the XML, yet silently never fires, or always fires (e.g. if `Calculation` is left as a bare constant like `10`, which evaluates as an always-true formula). Confirmed directly: toggling the operator dropdown away and back in the UI forced FM to regenerate the materialised calc from the same `op`/`RangeBegin`, after which the condition began working — proving the dialog state and the runtime state are stored and evaluated separately. ✓
@@ -1536,7 +1549,26 @@ A button icon serialises as binary `<Stream>` blocks inside `ButtonObj`, hex-enc
 | `GLPH` | Glyph index (single byte) |
 | `SVG ` | The full SVG document, hex-encoded (note the trailing space in the type) |
 
-The SVG stream decodes to a complete standalone SVG (XML declaration, viewBox, path with class `fm_fill`). Because it is self-contained, the icon round-trips intact. ✓
+The SVG stream decodes to a complete standalone SVG (XML declaration, viewBox, path with class `fm_fill`). Because it is self-contained, the icon round-trips intact. ✓ On a `[26.1+]` calculated icon these streams are only a placeholder, and the formula is in `SvgCalc` (§19.4).
+
+### §19.4 Calculated icons — `SvgCalc` `[26.1+]`
+
+FileMaker 26.1 lets a button or a button-bar segment take its icon from a calculation that returns SVG text ("Calculated icon" in Button Setup / Button Bar Setup, per the release notes); a popover button written by a tool carried one too (◎, §14). The formula travels in a new `<SvgCalc>` element, and `buttonFlags` gains bit 2 (4). ✓ (standalone button, pasted and copied back)
+
+```xml
+  <ButtonObj buttonFlags="4" iconSize="8" displayType="4">
+  </ButtonObj>
+  <SvgCalc>
+    <Calculation><![CDATA["<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2' y='2' width='12' height='12'/></svg>"]]></Calculation>
+  </SvgCalc>
+```
+
+- **Placement.** `SvgCalc` is a child of the `Object`, after the typed element: standalone Button `ButtonObj` → `SvgCalc` ✓; segment `ButtonObj` → `LabelCalc` → `SvgCalc` ◎ (copied, not pasted); PopoverButton `PopoverButtonObj` → `SvgCalc` ◎ (one capture, copied, not pasted).
+- **The icon streams are only a placeholder.** Copy output also carries `FNAM`/`GLPH`/`SVG ` streams (§19.3), byte-identical in every capture and decoding to a 24×24 drawing, not the formula's result. Calling it the Layout-mode placeholder follows the release notes ("In Layout mode, a placeholder icon appears"). A generated standalone button with `SvgCalc` and bit 2 but **no streams** pasted without error and came back with those streams added by FileMaker, so generators can leave them out on standalone buttons ✓. Not tested on segments or popover buttons.
+- **`displayType`** — the value matched §8.1's arrangement for the icon position that was set (`4`, icon left of label); not seen on screen with a calculated icon ◎.
+- **A formula not in effect is not carried.** A button written with the formula present but the calculated icon not in effect copied with no `SvgCalc`, no streams and `buttonFlags` bit 2 clear, so the formula does not travel with a copy (§29). ◎ (one capture)
+- **Rendering.** Browse-mode rendering of the formula's SVG was not checked here. Per the 26.1.1 release notes the formula must return SVG in FileMaker's supported grammar, and an invalid result shows a warning icon. ○
+- Leave `SvgCalc` and bit 2 out for a 26.0.x target; what 26.0 does with them on paste has not been tested.
 
 ---
 
@@ -1599,6 +1631,8 @@ Confirmed by round-trip: a field generated with both blocks came back with `Cond
 **Trailing children.** `CanEntryCalc` and `HideCondition` are the LAST children of the `Object`, after the entire typed inner element block (and after `RenderFormat` on shapes). When both are present, FileMaker normalises them to **`CanEntryCalc` then `HideCondition`**, regardless of paste order. ✓
 
 **Scope.** `CanEntryCalc` is for fields only — on a non-field object it can cause the whole object to fail to paste (§27), so never attach it elsewhere. `HideCondition` applies to any object type, including shapes, where FM emits it before `RenderFormat`. ✓
+
+**`SvgCalc` `[26.1+]`.** On a button, segment or popover button with a calculated icon, `SvgCalc` follows the typed element, and on a segment it follows `LabelCalc` (§19.4). Its position relative to `HideCondition` has not been captured. ◎
 
 **Object flags set by behavioural elements** (do not set these when generating; FileMaker sets them from object state):
 - bit 0 (1) — has `ConditionalFormatting` ✓
@@ -1700,6 +1734,8 @@ Round-trip behaviour of button steps (FM Pro 26):
 - Web viewer generated with `+4`/`+8` (`externalFlagSet` `32781`) at a small object size — progress bar and status chrome consume the full height, the page loads but nothing is visible (§15.1) ✓
 - A single selected Text object copying to the system clipboard as plain text instead of layout XML — no error shown, affects any single-object capture workflow (§0) ✓
 - An integer `LocalCSS` length written with a decimal point (`border-top-width: 1.0pt`) — that one declaration is dropped at paste while its siblings survive; the border keeps style and colour, width falls to `0pt`, nothing draws, nothing errors. `1pt` and `1.5pt` are kept (§26.2) ✓
+
+**Checking a paste, FileMaker 26.1.1+.** Per the release notes, pasting layout objects is now written to `Import.log`, listing the pasted items, any renamed because of a name conflict, and errors such as missing references. The one paste observed, into a local file, wrote `Import.log` next to the file and logged only a count: four objects, one of them a portal holding a field, gave `Layout objects imported : 5`. ◎
 
 ---
 
@@ -1884,12 +1920,13 @@ Saving a change to a stock theme forks it into a custom theme with a UUID-suffix
 
 Object-level definition survives the round trip. If something appears to drop, suspect the format, not the clipboard.
 
-Confirmed to survive: all styling (fill, gradient, borders, shadows, the full CSS vocabulary, the Face bitmask), structure, conditional formatting, tooltip, hide condition, placeholder, script triggers, button icons (embedded SVG streams), button-bar `LabelCalc`, and the 2026 `CanEntryCalc`.
+Confirmed to survive: all styling (fill, gradient, borders, shadows, the full CSS vocabulary, the Face bitmask), structure, conditional formatting, tooltip, hide condition, placeholder, script triggers, button icons (embedded SVG streams), button-bar `LabelCalc`, the 2026 `CanEntryCalc`, and the 26.1 `SvgCalc` while its calculated icon is in effect (standalone button; §19.4).
 
 Does NOT travel with a copied object, by nature rather than by format error:
 - **Record-bound content** — a field shows record data, not stored layout text; there is nothing to carry.
 - **Cross-file references that cannot rebind** — script-trigger and value-list references bind by internal id; they reconnect only if that id exists in the destination file. Present but unresolved otherwise. This is reference resolution, not a survival failure.
 - **Theme-level and layout-level properties** — part styling, layout background, the full theme palette, theme colour swatches, default-style designation. These are not object properties, so a copied object does not carry them. They require Save as XML (see §30).
+- **`[26.1+]` A calculated-icon formula that is not in effect** — copies with no `SvgCalc` and no streams (§19.4). ◎
 
 ### §29.1 Value list attachment
 
@@ -1905,6 +1942,9 @@ This spec covers the object-level clipboard format (`fmxmlsnippet type="LayoutOb
 - Layout background
 - The full named-style palette per theme (only individually referenced styles come through the clipboard)
 - Theme colour swatches and default-style designation
+- FileMaker 26.1.1 addition: Layout Setup's "Show alerts when field isn't modifiable or no records are present" — a layout setting, on by default in new files and off in existing ones (FileMaker 26.1.1 release notes)
+
+FileMaker 26.1.1 also changed Save as XML output in ways that matter when analysing an export: layout view settings are saved in a `WindowState` element, table views are saved, the Kiosk mode setting and the file's default layout are saved, and images used in layout object styles are stored as references in `LibraryCatalog` rather than as embedded Base64, unless "Save each layout object's binary data under its node" is on (release notes).
 
 ### §30.1 Not yet verified
 
